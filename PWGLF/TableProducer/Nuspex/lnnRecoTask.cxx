@@ -34,7 +34,6 @@
 #include "DataFormatsTPC/BetheBlochAleph.h"
 #include "DCAFitter/DCAFitterN.h"
 
-
 #include "PWGLF/DataModel/LFLnnTables.h"
 
 using namespace o2;
@@ -44,7 +43,6 @@ using std::array;
 using TracksFull = soa::Join<aod::TracksIU, aod::TracksExtra, aod::TracksCovIU>;
 using CollisionsFull = soa::Join<aod::Collisions, aod::EvSels, aod::CentFT0As, aod::CentFT0Cs, aod::CentFT0Ms, aod::CentFV0As>;
 using CollisionsFullMC = soa::Join<aod::Collisions, aod::McCollisionLabels, aod::EvSels, aod::CentFT0As, aod::CentFT0Cs, aod::CentFT0Ms, aod::CentFV0As>;
-
 
 namespace
 {
@@ -212,14 +210,13 @@ struct lnnRecoTask {
       hIsMatterGenTwoBody = qaRegistry.add<TH1>("hIsMatterGenTwoBody", ";; ", HistType::kTH1D, {{2, -0.5, 1.5}});
       hIsMatterGenTwoBody->GetXaxis()->SetBinLabel(1, "Matter");
       hIsMatterGenTwoBody->GetXaxis()->SetBinLabel(2, "Antimatter");
-      }
+    }
     hZvtx = qaRegistry.add<TH1>("hZvtx", ";z_{vtx} (cm); ", HistType::kTH1D, {{100, -20, 20}});
     hCentFT0A = qaRegistry.add<TH1>("hCentFT0A", ";Centrality; ", HistType::kTH1D, {{100, 0, 100}});
     hCentFT0C = qaRegistry.add<TH1>("hCentFT0C", ";Centrality; ", HistType::kTH1D, {{100, 0, 100}});
     hCentFT0M = qaRegistry.add<TH1>("hCentFT0M", ";Centrality; ", HistType::kTH1D, {{100, 0, 100}});
     hCentFV0A = qaRegistry.add<TH1>("hCentFV0A", ";Centrality; ", HistType::kTH1D, {{100, 0, 100}});
   }
-
 
   // group BCs
   void initCCDB(aod::BCsWithTimestamps::iterator const& bc)
@@ -291,11 +288,9 @@ struct lnnRecoTask {
       hdEdxTot->Fill(posRigidity, posTrack.tpcSignal());
       hdEdxTot->Fill(-negRigidity, negTrack.tpcSignal());
 
-
       // Bethe-Bloch calcution for 3H
       double expBethePos{tpc::BetheBlochAleph(static_cast<float>(posRigidity * 2 / constants::physics::MassTriton), mBBparams3H[0], mBBparams3H[1], mBBparams3H[2], mBBparams3H[3], mBBparams3H[4])};
       double expBetheNeg{tpc::BetheBlochAleph(static_cast<float>(negRigidity * 2 / constants::physics::MassTriton), mBBparams3H[0], mBBparams3H[1], mBBparams3H[2], mBBparams3H[3], mBBparams3H[4])};
-
 
       // nSigma calculation
       double expSigmaPos{expBethePos * mBBparams3H[5]};
@@ -309,7 +304,6 @@ struct lnnRecoTask {
 
       if (!is3H && !isAnti3H)
         continue;
-
 
       // Describing lnn as matter candidate
       lnnCandidate lnnCand;
@@ -356,7 +350,6 @@ struct lnnRecoTask {
         lnnCand.mom3H[i] *= 2;
       }
 
-
       // Definition of relativistic momentum and energy to triton and pion and total energy
       float h3P2 = lnnCand.mom3H[0] * lnnCand.mom3H[0] + lnnCand.mom3H[1] * lnnCand.mom3H[1] + lnnCand.mom3H[2] * lnnCand.mom3H[2];
       float piP2 = lnnCand.momPi[0] * lnnCand.momPi[0] + lnnCand.momPi[1] * lnnCand.momPi[1] + lnnCand.momPi[2] * lnnCand.momPi[2];
@@ -376,7 +369,6 @@ struct lnnRecoTask {
       if (lnnPt < ptMin)
         continue;
 
-
       // Definition of lnn mass
       float massLNNL = std::sqrt(h3lE * h3lE - lnnMom[0] * lnnMom[0] - lnnMom[1] * lnnMom[1] - lnnMom[2] * lnnMom[2]);
       bool isLNNMass = false;
@@ -384,7 +376,6 @@ struct lnnRecoTask {
         isLNNMass = true;
       if (!isLNNMass)
         continue;
-
 
       // V0, primary vertex and poiting angle
       lnnCand.dcaV0dau = std::sqrt(fitter.getChi2AtPCACandidate());
@@ -432,7 +423,6 @@ struct lnnRecoTask {
       auto mcLabPos = trackLabels.rawIteratorAt(lnnCand.posTrackID);
       auto mcLabNeg = trackLabels.rawIteratorAt(lnnCand.negTrackID);
 
-
       // Checking lnn, tritons and pions with MC simulations
       if (mcLabPos.has_mcParticle() && mcLabNeg.has_mcParticle()) {
         auto mcTrackPos = mcLabPos.mcParticle_as<aod::McParticles>();
@@ -465,7 +455,6 @@ struct lnnRecoTask {
       }
     }
   }
-
 
   void processData(CollisionsFull const& collisions, aod::V0s const& V0s, TracksFull const& tracks, aod::BCsWithTimestamps const&)
   {
@@ -506,7 +495,6 @@ struct lnnRecoTask {
       }
     }
   }
-
 
   // Data process
   PROCESS_SWITCH(lnnRecoTask, processData, "Data analysis", true);
