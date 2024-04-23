@@ -444,8 +444,8 @@ struct lnnRecoTask {
               auto secVtx = array{mcTrackPos.vx(), mcTrackPos.vy(), mcTrackPos.vz()};
 
               lnnCand.gMom = posMother.pVector();
-              lnnCand.gMom3H = mcTrackPos.pdgCode() == h3DauPdg ? mcTrackPos.pVector(): mcTrackNeg.pVector();
-              
+              lnnCand.gMom3H = mcTrackPos.pdgCode() == h3DauPdg ? mcTrackPos.pVector() : mcTrackNeg.pVector();
+
               lnnCand.gMom = array{posMother.px(), posMother.py(), posMother.pz()};
               lnnCand.gMom3H = mcTrackPos.pdgCode() == h3DauPdg ? array{mcTrackPos.px(), mcTrackPos.py(), mcTrackPos.pz()} : array{mcTrackNeg.px(), mcTrackNeg.py(), mcTrackNeg.pz()};
               for (int i = 0; i < 3; i++) {
