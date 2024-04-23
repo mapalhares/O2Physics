@@ -418,6 +418,7 @@ struct lnnRecoTask {
   }
 
   // Monte Carlo information
+
   void fillMCinfo(aod::McTrackLabels const& trackLabels, aod::McParticles const&)
 
   {
@@ -442,6 +443,7 @@ struct lnnRecoTask {
               // Checking primary and second vertex with MC simulations
               auto posPrimVtx = array{posMother.vx(), posMother.vy(), posMother.vz()};
               auto secVtx = array{mcTrackPos.vx(), mcTrackPos.vy(), mcTrackPos.vz()};
+
 
               lnnCand.gMom = posMother.pVector();
               lnnCand.gMom3H = mcTrackPos.pdgCode() == h3DauPdg ? mcTrackPos.pVector() : mcTrackNeg.pVector();
