@@ -50,8 +50,8 @@ constexpr double betheBlochDefault[1][6]{{-1.e32, -1.e32, -1.e32, -1.e32, -1.e32
 static const std::vector<std::string> betheBlochParNames{"p0", "p1", "p2", "p3", "p4", "resolution"};
 static const std::vector<std::string> particleNames{"3H"};
 
-constexpr int h3DauPdg{1000010030}; //PDG Triton
-constexpr int lnnPdg{1010000030}; //PDG Lnn
+constexpr int h3DauPdg{1000010030}; // PDG Triton
+constexpr int lnnPdg{1010000030};   // PDG Lnn
 
 std::shared_ptr<TH1> hEvents;
 std::shared_ptr<TH1> hZvtx;
@@ -283,7 +283,7 @@ struct lnnRecoTask {
       // temporary fix: tpcInnerParam() returns the momentum in all the software tags before: https://github.com/AliceO2Group/AliceO2/pull/12521
       bool posTritonPID = posTrack.pidForTracking() == o2::track::PID::Triton;
       bool negTritonPID = negTrack.pidForTracking() == o2::track::PID::Triton;
-      float posRigidity = posTrack.tpcInnerParam(); 
+      float posRigidity = posTrack.tpcInnerParam();
       float negRigidity = negTrack.tpcInnerParam();
 
       hdEdxTot->Fill(posRigidity, posTrack.tpcSignal());
@@ -511,7 +511,7 @@ struct lnnRecoTask {
       initCCDB(bc);
 
       hEvents->Fill(0.);
-      if (!collision.sel8() || std::abs(collision.posZ()) > 10) 
+      if (!collision.sel8() || std::abs(collision.posZ()) > 10)
         continue;
       hEvents->Fill(1.);
       hZvtx->Fill(collision.posZ());
