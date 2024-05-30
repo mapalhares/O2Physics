@@ -432,25 +432,25 @@ struct lnnRecoTask {
         if (mcTrackPos.has_mothers() && mcTrackNeg.has_mothers()) {
           for (auto& negMother : mcTrackNeg.mothers_as<aod::McParticles>()) {
             for (auto& posMother : mcTrackPos.mothers_as<aod::McParticles>()) {
-              if (posMother.globalIndex() != negMother.globalIndex()) 
+              if (posMother.globalIndex() != negMother.globalIndex())
                 continue;
-                if (!((mcTrackPos.pdgCode() == h3DauPdg && mcTrackNeg.pdgCode() == -211) || (mcTrackPos.pdgCode() == 211 && mcTrackNeg.pdgCode() == -1 * h3DauPdg)))
-                  continue;
-                if (std::abs(posMother.pdgCode()) != lnnPdg)
-                  continue;
+              if (!((mcTrackPos.pdgCode() == h3DauPdg && mcTrackNeg.pdgCode() == -211) || (mcTrackPos.pdgCode() == 211 && mcTrackNeg.pdgCode() == -1 * h3DauPdg)))
+                continue;
+              if (std::abs(posMother.pdgCode()) != lnnPdg)
+                continue;
 
-                // Checking primary and second vertex with MC simulations
-                std::array<float, 3> posPrimVtx = {posMother.vx(), posMother.vy(), posMother.vz()};
+              // Checking primary and second vertex with MC simulations
+              std::array<float, 3> posPrimVtx = {posMother.vx(), posMother.vy(), posMother.vz()};
 
-                std::array<float, 3> secVtx = {mcTrackPos.vx(), mcTrackPos.vy(), mcTrackPos.vz()};
+              std::array<float, 3> secVtx = {mcTrackPos.vx(), mcTrackPos.vy(), mcTrackPos.vz()};
 
-                lnnCand.gMom = posMother.pVector();
+              lnnCand.gMom = posMother.pVector();
 
-                lnnCand.gMom3H = mcTrackPos.pdgCode() == h3DauPdg ? mcTrackPos.pVector() : mcTrackNeg.pVector();
+              lnnCand.gMom3H = mcTrackPos.pdgCode() == h3DauPdg ? mcTrackPos.pVector() : mcTrackNeg.pVector();
 
-                for (int i = 0; i < 3; i++) {
-                  lnnCand.gDecVtx[i] = secVtx[i] - posPrimVtx[i];
-                }
+              for (int i = 0; i < 3; i++) {
+                lnnCand.gDecVtx[i] = secVtx[i] - posPrimVtx[i];
+              }
               lnnCand.isSignal = true;
               lnnCand.pdgCode = posMother.pdgCode();
               lnnCand.survEvSelection = isGoodCollision[posMother.mcCollisionId()];
@@ -462,7 +462,6 @@ struct lnnRecoTask {
       }
     }
   }
-  
 
   void processData(CollisionsFull const& collisions, aod::V0s const& V0s, TracksFull const& tracks, aod::BCsWithTimestamps const&)
   {
@@ -628,7 +627,6 @@ struct lnnRecoTask {
     }
   }
   PROCESS_SWITCH(lnnRecoTask, processMC, "MC analysis", false);
-
 };
 
 WorkflowSpec
