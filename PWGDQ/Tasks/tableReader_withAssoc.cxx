@@ -108,6 +108,7 @@ using MyBarrelTracks = soa::Join<aod::ReducedTracks, aod::ReducedTracksBarrel, a
 using MyBarrelTracksWithAmbiguities = soa::Join<aod::ReducedTracks, aod::ReducedTracksBarrel, aod::ReducedTracksBarrelPID, aod::BarrelAmbiguities>;
 using MyBarrelTracksWithCov = soa::Join<aod::ReducedTracks, aod::ReducedTracksBarrel, aod::ReducedTracksBarrelCov, aod::ReducedTracksBarrelPID>;
 using MyBarrelTracksWithCovWithAmbiguities = soa::Join<aod::ReducedTracks, aod::ReducedTracksBarrel, aod::ReducedTracksBarrelCov, aod::ReducedTracksBarrelPID, aod::BarrelAmbiguities>;
+using MyBarrelTracksWithCovWithAmbiguitiesWithColl = soa::Join<aod::ReducedTracks, aod::ReducedTracksBarrel, aod::ReducedTracksBarrelCov, aod::ReducedTracksBarrelPID, aod::BarrelAmbiguities, aod::ReducedTracksBarrelInfo>;
 using MyDielectronCandidates = soa::Join<aod::Dielectrons, aod::DielectronsExtra>;
 using MyDitrackCandidates = soa::Join<aod::Ditracks, aod::DitracksExtra>;
 using MyDimuonCandidates = soa::Join<aod::Dimuons, aod::DimuonsExtra>;
@@ -124,7 +125,7 @@ constexpr static uint32_t gkEventFillMapWithCovZdc = VarManager::ObjTypes::Reduc
 // constexpr static uint32_t gkEventFillMapWithCovQvector = VarManager::ObjTypes::ReducedEvent | VarManager::ObjTypes::ReducedEventExtended | VarManager::ObjTypes::ReducedEventVtxCov | VarManager::ObjTypes::ReducedEventQvector;
 constexpr static uint32_t gkTrackFillMap = VarManager::ObjTypes::ReducedTrack | VarManager::ObjTypes::ReducedTrackBarrel | VarManager::ObjTypes::ReducedTrackBarrelPID;
 constexpr static uint32_t gkTrackFillMapWithCov = VarManager::ObjTypes::ReducedTrack | VarManager::ObjTypes::ReducedTrackBarrel | VarManager::ObjTypes::ReducedTrackBarrelCov | VarManager::ObjTypes::ReducedTrackBarrelPID;
-// constexpr static uint32_t gkTrackFillMapWithColl = VarManager::ObjTypes::ReducedTrack | VarManager::ObjTypes::ReducedTrackBarrel | VarManager::ObjTypes::ReducedTrackBarrelPID | VarManager::ObjTypes::ReducedTrackCollInfo;
+constexpr static uint32_t gkTrackFillMapWithCovWithColl = VarManager::ObjTypes::ReducedTrack | VarManager::ObjTypes::ReducedTrackBarrel | VarManager::ObjTypes::ReducedTrackBarrelCov | VarManager::ObjTypes::ReducedTrackBarrelPID | VarManager::ObjTypes::ReducedTrackCollInfo;
 
 // constexpr static uint32_t gkMuonFillMap = VarManager::ObjTypes::ReducedMuon | VarManager::ObjTypes::ReducedMuonExtra;
 constexpr static uint32_t gkMuonFillMapWithCov = VarManager::ObjTypes::ReducedMuon | VarManager::ObjTypes::ReducedMuonExtra | VarManager::ObjTypes::ReducedMuonCov;
@@ -153,7 +154,6 @@ struct AnalysisEventSelection {
   // TODO: Provide the mixing variables and binning directly via configurables (e.g. vectors of float)
   Configurable<string> fConfigMixingVariables{"cfgMixingVars", "", "Mixing configs separated by a comma, default no mixing"};
   Configurable<string> fConfigEventCuts{"cfgEventCuts", "eventStandard", "Event selection"};
-  Configurable<bool> fConfigQA{"cfgQA", false, "If true, fill QA histograms"};
   Configurable<std::string> fConfigAddEventHistogram{"cfgAddEventHistogram", "", "Comma separated list of histograms"};
   Configurable<int> fConfigITSROFrameStartBorderMargin{"ITSROFrameStartBorderMargin", -1, "Number of bcs at the start of ITS RO Frame border. Take from CCDB if -1"};
   Configurable<int> fConfigITSROFrameEndBorderMargin{"ITSROFrameEndBorderMargin", -1, "Number of bcs at the end of ITS RO Frame border. Take from CCDB if -1"};
@@ -180,14 +180,12 @@ struct AnalysisEventSelection {
     VarManager::SetUseVars(AnalysisCut::fgUsedVars); // provide the list of required variables so that VarManager knows what to fill
 
     VarManager::SetDefaultVarNames();
-    if (fConfigQA) {
-      fHistMan = new HistogramManager("analysisHistos", "", VarManager::kNVars);
-      fHistMan->SetUseDefaultVariableNames(kTRUE);
-      fHistMan->SetDefaultVarNames(VarManager::fgVariableNames, VarManager::fgVariableUnits);
-      DefineHistograms(fHistMan, "Event_BeforeCuts;Event_AfterCuts;SameBunchCorrelations", fConfigAddEventHistogram.value.data()); // define all histograms
-      VarManager::SetUseVars(fHistMan->GetUsedVars());                                                                             // provide the list of required variables so that VarManager knows what to fill
-      fOutputList.setObject(fHistMan->GetMainHistogramList());
-    }
+    fHistMan = new HistogramManager("analysisHistos", "", VarManager::kNVars);
+    fHistMan->SetUseDefaultVariableNames(kTRUE);
+    fHistMan->SetDefaultVarNames(VarManager::fgVariableNames, VarManager::fgVariableUnits);
+    DefineHistograms(fHistMan, "Event_BeforeCuts;Event_AfterCuts;SameBunchCorrelations", fConfigAddEventHistogram.value.data()); // define all histograms
+    VarManager::SetUseVars(fHistMan->GetUsedVars());                                                                             // provide the list of required variables so that VarManager knows what to fill
+    fOutputList.setObject(fHistMan->GetMainHistogramList());
 
     TString mixVarsString = fConfigMixingVariables.value;
     std::unique_ptr<TObjArray> objArray(mixVarsString.Tokenize(","));
@@ -214,13 +212,15 @@ struct AnalysisEventSelection {
       fHeader = fCCDBApi.retrieveHeaders(Form("RCT/Info/RunInformation/%i", events.begin().runNumber()), fMetadataRCT, -1);
       uint64_t sor = std::atol(fHeader["SOR"].c_str());
       uint64_t eor = std::atol(fHeader["EOR"].c_str());
-      cout << "=========================== SOR / EOR is " << sor << " / " << eor << endl;
+      LOGP(debug, "=========================== SOR / EOR is {} / {}", sor, eor);
+      // cout << "=========================== SOR / EOR is " << sor << " / " << eor << endl;
       auto alppar = fCCDB->getForTimeStamp<o2::itsmft::DPLAlpideParam<0>>("ITS/Config/AlpideParam", events.begin().timestamp());
       EventSelectionParams* par = fCCDB->getForTimeStamp<EventSelectionParams>("EventSelection/EventSelectionParams", events.begin().timestamp());
       int itsROFrameStartBorderMargin = fConfigITSROFrameStartBorderMargin < 0 ? par->fITSROFrameStartBorderMargin : fConfigITSROFrameStartBorderMargin;
       int itsROFrameEndBorderMargin = fConfigITSROFrameEndBorderMargin < 0 ? par->fITSROFrameEndBorderMargin : fConfigITSROFrameEndBorderMargin;
       VarManager::SetITSROFBorderselection(alppar->roFrameBiasInBC, alppar->roFrameLengthInBC, itsROFrameStartBorderMargin, itsROFrameEndBorderMargin);
-      cout << "==============++++++++++++========== roBias / roLength / start / end :: " << alppar->roFrameBiasInBC << " / " << alppar->roFrameLengthInBC << " / " << itsROFrameStartBorderMargin << " / " << itsROFrameEndBorderMargin << endl;
+      LOGP(debug, "==============++++++++++++========== roBias / roLength / start / end :: {} / {} / {} / {}", alppar->roFrameBiasInBC, alppar->roFrameLengthInBC, itsROFrameStartBorderMargin, itsROFrameEndBorderMargin);
+      // cout << "==============++++++++++++========== roBias / roLength / start / end :: " << alppar->roFrameBiasInBC << " / " << alppar->roFrameLengthInBC << " / " << itsROFrameStartBorderMargin << " / " << itsROFrameEndBorderMargin << endl;
       fCurrentRun = events.begin().runNumber();
     }
 
@@ -233,14 +233,9 @@ struct AnalysisEventSelection {
       VarManager::FillEvent<TEventFillMap>(event);
 
       bool decision = false;
-      // if QA is requested fill histograms before event selections
-      if (fConfigQA) {
-        fHistMan->FillHistClass("Event_BeforeCuts", VarManager::fgValues); // automatically fill all the histograms in the class Event
-      }
+      fHistMan->FillHistClass("Event_BeforeCuts", VarManager::fgValues); // automatically fill all the histograms in the class Event
       if (fEventCut->IsSelected(VarManager::fgValues)) {
-        if (fConfigQA) {
-          fHistMan->FillHistClass("Event_AfterCuts", VarManager::fgValues);
-        }
+        fHistMan->FillHistClass("Event_AfterCuts", VarManager::fgValues);
         decision = true;
       }
       fSelMap[event.globalIndex()] = decision;
@@ -818,6 +813,7 @@ struct AnalysisSameEventPairing {
   Produces<aod::Dielectrons> dielectronList;
   Produces<aod::Dimuons> dimuonList;
   Produces<aod::DielectronsExtra> dielectronsExtraList;
+  Produces<aod::DielectronsInfo> dielectronInfoList;
   Produces<aod::DimuonsExtra> dimuonsExtraList;
   Produces<aod::DielectronsAll> dielectronAllList;
   Produces<aod::DimuonsAll> dimuonAllList;
@@ -885,7 +881,7 @@ struct AnalysisSameEventPairing {
 
   void init(o2::framework::InitContext& context)
   {
-    fEnableBarrelHistos = context.mOptions.get<bool>("processAllSkimmed") || context.mOptions.get<bool>("processBarrelOnlySkimmed");
+    fEnableBarrelHistos = context.mOptions.get<bool>("processAllSkimmed") || context.mOptions.get<bool>("processBarrelOnlySkimmed") || context.mOptions.get<bool>("processBarrelOnlyWithCollSkimmed");
     fEnableBarrelMixingHistos = context.mOptions.get<bool>("processMixingAllSkimmed");
     fEnableMuonHistos = context.mOptions.get<bool>("processAllSkimmed") || context.mOptions.get<bool>("processMuonOnlySkimmed");
     fEnableMuonMixingHistos = context.mOptions.get<bool>("processMixingAllSkimmed");
@@ -1120,9 +1116,11 @@ struct AnalysisSameEventPairing {
   template <bool TTwoProngFitter, int TPairType, uint32_t TEventFillMap, uint32_t TTrackFillMap, typename TEvents, typename TTrackAssocs, typename TTracks>
   void runSameEventPairing(TEvents const& events, Preslice<TTrackAssocs>& preslice, TTrackAssocs const& assocs, TTracks const& /*tracks*/)
   {
-    if (fCurrentRun != events.begin().runNumber()) {
-      initParamsFromCCDB(events.begin().timestamp(), TTwoProngFitter);
-      fCurrentRun = events.begin().runNumber();
+    if (events.size() > 0) { // Additional protection to avoid crashing of events.begin().runNumber()
+      if (fCurrentRun != events.begin().runNumber()) {
+        initParamsFromCCDB(events.begin().timestamp(), TTwoProngFitter);
+        fCurrentRun = events.begin().runNumber();
+      }
     }
 
     TString cutNames = fConfigTrackCuts.value;
@@ -1151,6 +1149,7 @@ struct AnalysisSameEventPairing {
     dielectronList.reserve(1);
     dimuonList.reserve(1);
     dielectronsExtraList.reserve(1);
+    dielectronInfoList.reserve(1);
     dimuonsExtraList.reserve(1);
     dileptonInfoList.reserve(1);
     dileptonFlowList.reserve(1);
@@ -1216,6 +1215,7 @@ struct AnalysisSameEventPairing {
                          t1.sign() + t2.sign(), twoTrackFilter, 0);
 
           if constexpr ((TTrackFillMap & VarManager::ObjTypes::ReducedTrackCollInfo) > 0) {
+            dielectronInfoList(t1.collisionId(), t1.trackId(), t2.trackId());
             dileptonInfoList(t1.collisionId(), event.posX(), event.posY(), event.posZ());
           }
           if constexpr (trackHasCov && TTwoProngFitter) {
@@ -1462,6 +1462,13 @@ struct AnalysisSameEventPairing {
     runSameEventPairing<true, VarManager::kDecayToEE, gkEventFillMapWithCov, gkTrackFillMapWithCov>(events, trackAssocsPerCollision, barrelAssocs, barrelTracks);
   }
 
+  void processBarrelOnlyWithCollSkimmed(MyEventsVtxCovSelected const& events,
+                                        soa::Join<aod::ReducedTracksAssoc, aod::BarrelTrackCuts, aod::Prefilter> const& barrelAssocs,
+                                        MyBarrelTracksWithCovWithAmbiguitiesWithColl const& barrelTracks)
+  {
+    runSameEventPairing<true, VarManager::kDecayToEE, gkEventFillMapWithCov, gkTrackFillMapWithCovWithColl>(events, trackAssocsPerCollision, barrelAssocs, barrelTracks);
+  }
+
   void processMuonOnlySkimmed(MyEventsVtxCovSelected const& events,
                               soa::Join<aod::ReducedMuonsAssoc, aod::MuonTrackCuts> const& muonAssocs, MyMuonTracksWithCov const& muons)
   {
@@ -1483,6 +1490,7 @@ struct AnalysisSameEventPairing {
 
   PROCESS_SWITCH(AnalysisSameEventPairing, processAllSkimmed, "Run all types of pairing, with skimmed tracks/muons", false);
   PROCESS_SWITCH(AnalysisSameEventPairing, processBarrelOnlySkimmed, "Run barrel only pairing, with skimmed tracks", false);
+  PROCESS_SWITCH(AnalysisSameEventPairing, processBarrelOnlyWithCollSkimmed, "Run barrel only pairing, with skimmed tracks and with collision information", false);
   PROCESS_SWITCH(AnalysisSameEventPairing, processMuonOnlySkimmed, "Run muon only pairing, with skimmed tracks", false);
   PROCESS_SWITCH(AnalysisSameEventPairing, processMixingAllSkimmed, "Run all types of mixed pairing, with skimmed tracks/muons", false);
   PROCESS_SWITCH(AnalysisSameEventPairing, processDummy, "Dummy function, enabled only if none of the others are enabled", false);
@@ -1760,7 +1768,7 @@ struct AnalysisAsymmetricPairing {
         if (fConfigUseKFVertexing.value) {
           VarManager::SetupThreeProngKFParticle(magField);
         } else {
-          VarManager::SetupThreeProngDCAFitter();
+          VarManager::SetupThreeProngDCAFitter(magField, true, 200.0f, 4.0f, 1.0e-3f, 0.9f, fConfigUseAbsDCA.value);
         }
       } else {
         if (fConfigUseKFVertexing.value) {
@@ -1774,7 +1782,7 @@ struct AnalysisAsymmetricPairing {
         if (fConfigUseKFVertexing.value) {
           VarManager::SetupThreeProngKFParticle(fConfigMagField.value);
         } else {
-          VarManager::SetupThreeProngDCAFitter();
+          VarManager::SetupThreeProngDCAFitter(fConfigMagField.value, true, 200.0f, 4.0f, 1.0e-3f, 0.9f, fConfigUseAbsDCA.value);
         }
       } else {
         if (fConfigUseKFVertexing.value) {
@@ -1788,11 +1796,13 @@ struct AnalysisAsymmetricPairing {
 
   // Template function to run same event pairing with asymmetric pairs (e.g. kaon-pion)
   template <bool TTwoProngFitter, int TPairType, uint32_t TEventFillMap, uint32_t TTrackFillMap, typename TEvents, typename TTrackAssocs, typename TTracks>
-  void runAsymmetricPairing(TEvents const& events, Preslice<TTrackAssocs>& preslice, TTrackAssocs const& assocs, TTracks const& tracks)
+  void runAsymmetricPairing(TEvents const& events, Preslice<TTrackAssocs>& preslice, TTrackAssocs const& assocs, TTracks const& /*tracks*/)
   {
-    if (fCurrentRun != events.begin().runNumber()) {
-      initParamsFromCCDB(events.begin().timestamp(), false);
-      fCurrentRun = events.begin().runNumber();
+    if (events.size() > 0) { // Additional protection to avoid crashing of events.begin().runNumber()
+      if (fCurrentRun != events.begin().runNumber()) {
+        initParamsFromCCDB(events.begin().timestamp(), false);
+        fCurrentRun = events.begin().runNumber();
+      }
     }
 
     std::map<int, std::vector<TString>> histNames = fTrackHistNames;
@@ -1952,9 +1962,11 @@ struct AnalysisAsymmetricPairing {
   template <bool TThreeProngFitter, uint32_t TEventFillMap, uint32_t TTrackFillMap, typename TEvents, typename TTrackAssocs, typename TTracks>
   void runThreeProng(TEvents const& events, Preslice<TTrackAssocs>& preslice, TTrackAssocs const& assocs, TTracks const& tracks, VarManager::PairCandidateType tripletType)
   {
-    if (fCurrentRun != events.begin().runNumber()) {
-      initParamsFromCCDB(events.begin().timestamp(), true);
-      fCurrentRun = events.begin().runNumber();
+    if (events.size() > 0) { // Additional protection to avoid crashing of events.begin().runNumber()
+      if (fCurrentRun != events.begin().runNumber()) {
+        initParamsFromCCDB(events.begin().timestamp(), true);
+        fCurrentRun = events.begin().runNumber();
+      }
     }
 
     std::map<int, std::vector<TString>> histNames = fTrackHistNames;
@@ -2002,7 +2014,7 @@ struct AnalysisAsymmetricPairing {
 
   // Helper function to process triplet
   template <bool TThreeProngFitter, uint32_t TEventFillMap, uint32_t TTrackFillMap, typename TTrackAssoc, typename TTracks, typename TEvent>
-  void readTriplet(TTrackAssoc const& a1, TTrackAssoc const& a2, TTrackAssoc const& a3, TTracks const& tracks, TEvent const& event, VarManager::PairCandidateType tripletType, std::map<int, std::vector<TString>> histNames)
+  void readTriplet(TTrackAssoc const& a1, TTrackAssoc const& a2, TTrackAssoc const& a3, TTracks const& /*tracks*/, TEvent const& event, VarManager::PairCandidateType tripletType, std::map<int, std::vector<TString>> histNames)
   {
     uint32_t threeTrackFilter = 0;
     // Find out which leg cut combination the triplet passes
@@ -2287,13 +2299,13 @@ struct AnalysisDileptonTrack {
       if (fConfigUseKFVertexing.value) {
         VarManager::SetupThreeProngKFParticle(magField);
       } else {
-        VarManager::SetupThreeProngDCAFitter(); // TODO: get these parameters from Configurables
+        VarManager::SetupThreeProngDCAFitter(magField, true, 200.0f, 4.0f, 1.0e-3f, 0.9f, false); // TODO: get these parameters from Configurables
       }
     } else {
       if (fConfigUseKFVertexing.value) {
         VarManager::SetupThreeProngKFParticle(fConfigMagField.value);
       } else {
-        VarManager::SetupThreeProngDCAFitter(); // TODO: get these parameters from Configurables
+        VarManager::SetupThreeProngDCAFitter(fConfigMagField.value, true, 200.0f, 4.0f, 1.0e-3f, 0.9f, false); // TODO: get these parameters from Configurables
       }
     }
   }

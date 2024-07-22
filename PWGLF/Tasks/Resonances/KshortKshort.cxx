@@ -21,11 +21,14 @@
 #include <TMath.h>
 #include <TObjArray.h>
 #include <TPDGCode.h>
-#include "TF1.h"
-
 #include <array>
 #include <cmath>
 #include <cstdlib>
+#include "TF1.h"
+#include "TRandom3.h"
+#include "Math/Vector3D.h"
+#include "Math/Vector4D.h"
+#include "Math/GenVector/Boost.h"
 
 #include "Common/Core/TrackSelection.h"
 #include "Common/Core/trackUtilities.h"
@@ -42,8 +45,6 @@
 #include "Framework/AnalysisTask.h"              //
 #include "Framework/runDataProcessing.h"         //
 #include "PWGLF/DataModel/LFStrangenessTables.h" //
-// #include "CommonConstants/PhysicsConstants.h"
-// #include "Framework/HistogramRegistry.h"
 
 using namespace o2;
 using namespace o2::framework;
@@ -54,7 +55,6 @@ using std::array;
 
 struct strangeness_tutorial {
   SliceCache cache;
-
   HistogramRegistry rEventSelection{"eventSelection", {}, OutputObjHandlingPolicy::AnalysisObject, true, true};
   HistogramRegistry rKzeroShort{"kzeroShort", {}, OutputObjHandlingPolicy::AnalysisObject, true, true};
   HistogramRegistry hglue{"hglueball", {}, OutputObjHandlingPolicy::AnalysisObject, true, true};
@@ -95,6 +95,7 @@ struct strangeness_tutorial {
   Configurable<float> ConfDaughPIDCuts{"ConfDaughPIDCuts", 5, "PID selections for KS0 daughters"};
   Configurable<float> Confarmcut{"Confarmcut", 0.2f, "Armenteros cut"};
   Configurable<float> ConfKsrapidity{"ConfKsrapidity", 0.5f, "Rapidity cut on K0s"};
+
   // Configurable<float> lowmasscutks0{"lowmasscutks0", 0.497 - 4 * 0.005, "Low mass cut on K0s"};
   // Configurable<float> highmasscutks0{"highmasscutks0", 0.497 + 4 * 0.005, "High mass cut on K0s"};
 
@@ -103,6 +104,13 @@ struct strangeness_tutorial {
   Configurable<int> cfgNmixedEvents{"cfgNmixedEvents", 5, "Number of mixed events"};
   Configurable<bool> cfgMultFOTM{"cfgMultFOTM", true, "Use FOTM multiplicity if pp else use 0 here for PbPb (FT0C)"};
   ConfigurableAxis binsCent{"binsCent", {VARIABLE_WIDTH, 0., 5., 10., 30., 50., 70., 100., 110., 150.}, "Binning of the centrality axis"};
+
+  // output THnSparses
+  Configurable<bool> activateTHnSparseCosThStarHelicity{"activateTHnSparseCosThStarHelicity", false, "Activate the THnSparse with cosThStar w.r.t. helicity axis"};
+  Configurable<bool> activateTHnSparseCosThStarProduction{"activateTHnSparseCosThStarProduction", false, "Activate the THnSparse with cosThStar w.r.t. production axis"};
+  Configurable<bool> activateTHnSparseCosThStarBeam{"activateTHnSparseCosThStarBeam", true, "Activate the THnSparse with cosThStar w.r.t. beam axis (Gottified jackson frame)"};
+  Configurable<bool> activateTHnSparseCosThStarRandom{"activateTHnSparseCosThStarRandom", false, "Activate the THnSparse with cosThStar w.r.t. random axis"};
+  Configurable<int> c_nof_rotations{"c_nof_rotations", 3, "Number of random rotations in the rotational background"};
 
   // Other cuts on Ks and glueball
   Configurable<bool> rapidityks{"rapidityks", true, "rapidity cut on K0s"};
@@ -114,14 +122,15 @@ struct strangeness_tutorial {
 
   // Mass and pT axis as configurables
   Configurable<float> cPtMin{"cPtMin", 0.0f, "Minimum pT"};
-  Configurable<float> cPtMax{"cPtMax", 15.0f, "Maximum pT"};
-  Configurable<int> cPtBins{"cPtBins", 150, "Number of pT bins"};
+  Configurable<float> cPtMax{"cPtMax", 50.0f, "Maximum pT"};
+  Configurable<int> cPtBins{"cPtBins", 500, "Number of pT bins"};
   Configurable<float> cMassMin{"cMassMin", 0.9f, "Minimum mass of glueball"};
-  Configurable<float> cMassMax{"cMassMax", 2.4f, "Maximum mass of glueball"};
-  Configurable<int> cMassBins{"cMassBins", 150, "Number of mass bins for glueball"};
+  Configurable<float> cMassMax{"cMassMax", 3.0f, "Maximum mass of glueball"};
+  Configurable<int> cMassBins{"cMassBins", 210, "Number of mass bins for glueball"};
   Configurable<float> ksMassMin{"ksMassMin", 0.45f, "Minimum mass of K0s"};
   Configurable<float> ksMassMax{"ksMassMax", 0.55f, "Maximum mass of K0s"};
   Configurable<int> ksMassBins{"ksMassBins", 200, "Number of mass bins for K0s"};
+  ConfigurableAxis configThnAxisPOL{"configThnAxisPOL", {20, -1.0, 1.0}, "Costheta axis"};
 
   // Event selection cuts - Alex (Temporary, need to fix!)
   TF1* fMultPVCutLow = nullptr;
@@ -135,12 +144,34 @@ struct strangeness_tutorial {
     // Axes
     AxisSpec K0ShortMassAxis = {ksMassBins, ksMassMin, ksMassMax, "#it{M}_{inv} [GeV/#it{c}^{2}]"};
     AxisSpec glueballMassAxis = {cMassBins, cMassMin, cMassMax, "#it{M}_{inv} [GeV/#it{c}^{2}]"};
-    AxisSpec vertexZAxis = {100, -15.f, 15.f, "vrtx_{Z} [cm]"}; // for histogram
+    AxisSpec vertexZAxis = {60, -15.f, 15.f, "vrtx_{Z} [cm]"}; // for histogram
     AxisSpec ptAxis = {cPtBins, cPtMin, cPtMax, "#it{p}_{T} (GeV/#it{c})"};
     // AxisSpec multiplicityAxis = {110, 0.0f, 150.0f, "Multiplicity Axis"};
     AxisSpec multiplicityAxis = {binsCent, "Multiplicity Axis"};
+    AxisSpec thnAxisPOL{configThnAxisPOL, "Configurabel theta axis"};
 
-    // Histograms
+    //  THnSparses
+    std::array<int, 4> sparses = {activateTHnSparseCosThStarHelicity, activateTHnSparseCosThStarProduction, activateTHnSparseCosThStarBeam, activateTHnSparseCosThStarRandom};
+
+    // std::array<int, 1> sparses = {activateTHnSparseCosThStarHelicity};
+
+    if (std::accumulate(sparses.begin(), sparses.end(), 0) == 0) {
+      LOGP(fatal, "No output THnSparses enabled");
+    } else {
+      if (activateTHnSparseCosThStarHelicity) {
+        LOGP(info, "THnSparse with cosThStar w.r.t. helicity axis active.");
+      }
+      if (activateTHnSparseCosThStarProduction) {
+        LOGP(info, "THnSparse with cosThStar w.r.t. production axis active.");
+      }
+      if (activateTHnSparseCosThStarBeam) {
+        LOGP(info, "THnSparse with cosThStar w.r.t. beam axis active. (Gottified jackson frame)");
+      }
+      if (activateTHnSparseCosThStarRandom) {
+        LOGP(info, "THnSparse with cosThStar w.r.t. random axis active.");
+      }
+    }
+
     // Event selection
     rEventSelection.add("hVertexZRec", "hVertexZRec", {HistType::kTH1F, {vertexZAxis}});
     rEventSelection.add("hmultiplicity", "hmultiplicity", {HistType::kTH1F, {{150, 0.0f, 150.0f}}});
@@ -148,15 +179,26 @@ struct strangeness_tutorial {
     if (inv_mass1D) {
       hglue.add("h1glueInvMassDS", "h1glueInvMassDS", kTH1F, {glueballMassAxis});
       hglue.add("h1glueInvMassME", "h1glueInvMassME", kTH1F, {glueballMassAxis});
+      hglue.add("h1glueInvMassRot", "h1glueInvMassRot", kTH1F, {glueballMassAxis});
     }
-    hglue.add("h3glueInvMassDS", "h3glueInvMassDS", kTHnSparseF, {multiplicityAxis, ptAxis, glueballMassAxis}, true);
-    hglue.add("h3glueInvMassME", "h3glueInvMassME", kTHnSparseF, {multiplicityAxis, ptAxis, glueballMassAxis}, true);
+
+    hglue.add("h3glueInvMassDS", "h3glueInvMassDS", kTHnSparseF, {multiplicityAxis, ptAxis, glueballMassAxis, thnAxisPOL}, true);
+    hglue.add("h3glueInvMassME", "h3glueInvMassME", kTHnSparseF, {multiplicityAxis, ptAxis, glueballMassAxis, thnAxisPOL}, true);
+    hglue.add("h3glueInvMassRot", "h3glueInvMassRot", kTHnSparseF, {multiplicityAxis, ptAxis, glueballMassAxis, thnAxisPOL}, true);
+
     hglue.add("heventscheck", "heventscheck", kTH1F, {{9, 0, 9}});
+
+    // add angular distribution polarization axes
+    // histos.add("hSparseHESASameEvent", "hSparseHESASameEvent", HistType::kTHnSparseF, {thnAxisInvMass, thnAxisPt,thnAxisCentrality,thnAxisPOL});
+    // histos.add("hSparsePPSASameEvent", "hSparsePPSASameEvent", HistType::kTHnSparseF, {thnAxisInvMass, thnAxisPt,thnAxisCentrality,thnAxisPOL});
+    // histos.add("hSparseBASASameEvent", "hSparseBASASameEvent", HistType::kTHnSparseF, {thnAxisInvMass, thnAxisPt,thnAxisCentrality,thnAxisPOL});
+    // histos.add("hSparseRndASASameEvent", "hSparseRndASASameEvent", HistType::kTHnSparseF, {thnAxisInvMass, thnAxisPt,thnAxisCentrality,thnAxisPOL});
 
     // K0s topological/PID cuts
     if (QAv0) {
       // Invariant Mass
       rKzeroShort.add("hMassK0Shortbefore", "hMassK0Shortbefore", kTHnSparseF, {K0ShortMassAxis, ptAxis});
+      rKzeroShort.add("hMasscorrelationbefore", "hMasscorrelationbefore", kTH2F, {K0ShortMassAxis, K0ShortMassAxis});
       rKzeroShort.add("hMassK0ShortSelected", "hMassK0ShortSelected", kTHnSparseF, {K0ShortMassAxis, ptAxis});
       // Topological histograms (after the selection)
       rKzeroShort.add("hDCAV0Daughters", "DCA between v0 daughters", {HistType::kTH1F, {{60, -3.0f, 3.0f}}});
@@ -165,6 +207,7 @@ struct strangeness_tutorial {
       rKzeroShort.add("Mass_lambda", "Mass under lambda hypothesis", kTH1F, {glueballMassAxis});
       rKzeroShort.add("mass_AntiLambda", "Mass under anti-lambda hypothesis", kTH1F, {glueballMassAxis});
       rKzeroShort.add("mass_Gamma", "Mass under Gamma hypothesis", kTH1F, {glueballMassAxis});
+      rKzeroShort.add("mass_lambda_kshort", "mass under lambda hypotheses and Kshort mass", kTH2F, {{100, 0.2, 0.8}, {100, 0.9, 1.5}});
       // rKzeroShort.add("mass_Hypertriton", "Mass under hypertriton hypothesis", kTH1F, {glueballMassAxis});
       // rKzeroShort.add("mass_AnitHypertriton", "Mass under anti-hypertriton hypothesis", kTH1F, {glueballMassAxis});
       rKzeroShort.add("rapidity", "Rapidity distribution", kTH1F, {{100, -1.0f, 1.0f}});
@@ -173,7 +216,7 @@ struct strangeness_tutorial {
       rKzeroShort.add("hDCAnegtopv", "DCA negative daughter to PV", kTH1F, {{1000, -10.0f, 10.0f}});
       rKzeroShort.add("hDCAv0topv", "DCA V0 to PV", kTH1F, {{60, -3.0f, 3.0f}});
       rKzeroShort.add("halpha", "Armenteros alpha", kTH1F, {{100, -5.0f, 5.0f}});
-      rKzeroShort.add("hqtarm", "qtarm", kTH1F, {{100, 0.0f, 1.0f}});
+      rKzeroShort.add("hqtarmbyalpha", "qtarm/alpha", kTH1F, {{100, 0.0f, 1.0f}});
       rKzeroShort.add("hpsipair", "psi pair angle", kTH1F, {{100, -5.0f, 5.0f}});
 
       // // Topological histograms (before the selection)
@@ -200,12 +243,12 @@ struct strangeness_tutorial {
       fMultPVCutLow->SetParameters(2834.66, -87.0127, 0.915126, -0.00330136, 332.513, -12.3476, 0.251663, -0.00272819, 1.12242e-05);
       fMultPVCutHigh = new TF1("fMultPVCutHigh", "[0]+[1]*x+[2]*x*x+[3]*x*x*x + 2.5*([4]+[5]*x+[6]*x*x+[7]*x*x*x+[8]*x*x*x*x)", 0, 100);
       fMultPVCutHigh->SetParameters(2834.66, -87.0127, 0.915126, -0.00330136, 332.513, -12.3476, 0.251663, -0.00272819, 1.12242e-05);
-      fMultCutLow = new TF1("fMultCutLow", "[0]+[1]*x+[2]*x*x+[3]*x*x*x - 2.5*([4]+[5]*x)", 0, 100);
-      fMultCutLow->SetParameters(1893.94, -53.86, 0.502913, -0.0015122, 109.625, -1.19253);
-      fMultCutHigh = new TF1("fMultCutHigh", "[0]+[1]*x+[2]*x*x+[3]*x*x*x + 3.*([4]+[5]*x)", 0, 100);
-      fMultCutHigh->SetParameters(1893.94, -53.86, 0.502913, -0.0015122, 109.625, -1.19253);
-      fMultMultPVCut = new TF1("fMultMultPVCut", "[0]+[1]*x+[2]*x*x", 0, 5000);
-      fMultMultPVCut->SetParameters(-0.1, 0.785, -4.7e-05);
+      // fMultCutLow = new TF1("fMultCutLow", "[0]+[1]*x+[2]*x*x+[3]*x*x*x - 2.5*([4]+[5]*x)", 0, 100);
+      // fMultCutLow->SetParameters(1893.94, -53.86, 0.502913, -0.0015122, 109.625, -1.19253);
+      // fMultCutHigh = new TF1("fMultCutHigh", "[0]+[1]*x+[2]*x*x+[3]*x*x*x + 3.*([4]+[5]*x)", 0, 100);
+      // fMultCutHigh->SetParameters(1893.94, -53.86, 0.502913, -0.0015122, 109.625, -1.19253);
+      // fMultMultPVCut = new TF1("fMultMultPVCut", "[0]+[1]*x+[2]*x*x", 0, 5000);
+      // fMultMultPVCut->SetParameters(-0.1, 0.785, -4.7e-05);
     }
   }
 
@@ -266,6 +309,7 @@ struct strangeness_tutorial {
 
     if (QAv0) {
       rKzeroShort.fill(HIST("hMassK0Shortbefore"), candidate.mK0Short(), candidate.pt());
+      rKzeroShort.fill(HIST("hMasscorrelationbefore"), candidate.mK0Short(), candidate.mK0Short());
       rKzeroShort.fill(HIST("hLT"), CtauK0s);
       rKzeroShort.fill(HIST("hDCAV0Daughters"), candidate.dcaV0daughters());
       rKzeroShort.fill(HIST("hV0CosPA"), candidate.v0cosPA());
@@ -280,8 +324,9 @@ struct strangeness_tutorial {
       rKzeroShort.fill(HIST("hDCAnegtopv"), candidate.dcanegtopv());
       rKzeroShort.fill(HIST("hDCAv0topv"), candidate.dcav0topv());
       rKzeroShort.fill(HIST("halpha"), candidate.alpha());
-      rKzeroShort.fill(HIST("hqtarm"), candidate.qtarm());
+      rKzeroShort.fill(HIST("hqtarmbyalpha"), arm);
       rKzeroShort.fill(HIST("hpsipair"), candidate.psipair());
+      rKzeroShort.fill(HIST("mass_lambda_kshort"), candidate.mK0Short(), candidate.mLambda());
     }
 
     if (!DCAv0topv && fabs(candidate.dcav0topv()) > cMaxV0DCA) {
@@ -405,6 +450,8 @@ struct strangeness_tutorial {
   //                  soa::Filtered<aod::V0Datas> const& V0s,
   //                  DaughterTracks const&)
 
+  ROOT::Math::PxPyPzMVector daughter1, daughter2;
+  ROOT::Math::PxPyPzMVector lv3;
   void processSE(EventCandidates::iterator const& collision, TrackCandidates const& /*tracks*/, aod::V0Datas const& V0s)
   {
     hglue.fill(HIST("heventscheck"), 0.5);
@@ -450,37 +497,98 @@ struct strangeness_tutorial {
       if (negtrack1.globalIndex() == negtrack2.globalIndex()) {
         continue;
       }
-      double nTPCSigmaPos1[1]{postrack1.tpcNSigmaPi()};
-      double nTPCSigmaNeg1[1]{negtrack1.tpcNSigmaPi()};
-      double nTPCSigmaPos2[1]{postrack2.tpcNSigmaPi()};
-      double nTPCSigmaNeg2[1]{negtrack2.tpcNSigmaPi()};
+      double nTPCSigmaPos1{postrack1.tpcNSigmaPi()};
+      double nTPCSigmaNeg1{negtrack1.tpcNSigmaPi()};
+      double nTPCSigmaPos2{postrack2.tpcNSigmaPi()};
+      double nTPCSigmaNeg2{negtrack2.tpcNSigmaPi()};
 
-      if (!isSelectedV0Daughter(postrack1, 1, nTPCSigmaPos1[0], v1)) {
+      if (!isSelectedV0Daughter(postrack1, 1, nTPCSigmaPos1, v1)) {
         continue;
       }
-      if (!isSelectedV0Daughter(postrack2, 1, nTPCSigmaPos2[0], v2)) {
+      if (!isSelectedV0Daughter(postrack2, 1, nTPCSigmaPos2, v2)) {
         continue;
       }
-      if (!isSelectedV0Daughter(negtrack1, -1, nTPCSigmaNeg1[0], v1)) {
+      if (!isSelectedV0Daughter(negtrack1, -1, nTPCSigmaNeg1, v1)) {
         continue;
       }
-      if (!isSelectedV0Daughter(negtrack2, -1, nTPCSigmaNeg2[0], v2)) {
+      if (!isSelectedV0Daughter(negtrack2, -1, nTPCSigmaNeg2, v2)) {
         continue;
       }
 
       hglue.fill(HIST("heventscheck"), 3.5);
 
-      TLorentzVector lv1, lv2, lv3;
+      TLorentzVector lv1, lv2, lv3, lv4, lv5;
+
       lv1.SetPtEtaPhiM(v1.pt(), v1.eta(), v1.phi(), massK0s);
+
       lv2.SetPtEtaPhiM(v2.pt(), v2.eta(), v2.phi(), massK0s);
+
       lv3 = lv1 + lv2;
 
+      daughter1 = ROOT::Math::PxPyPzMVector(v1.px(), v1.py(), v1.pz(), massK0s); // Kplus
+      daughter2 = ROOT::Math::PxPyPzMVector(v2.px(), v2.py(), v2.pz(), massK0s); // Kminus
+
+      // polarization calculations
+
+      auto phiRandom = gRandom->Uniform(0.f, constants::math::TwoPI);
+      auto thetaRandom = gRandom->Uniform(0.f, constants::math::PI);
+      ROOT::Math::PxPyPzMVector fourVecDau = ROOT::Math::PxPyPzMVector(daughter1.Px(), daughter1.Py(), daughter1.Pz(), massK0s); // Kshort
+
+      ROOT::Math::PxPyPzMVector fourVecMother = ROOT::Math::PxPyPzMVector(lv3.Px(), lv3.Py(), lv3.Pz(), lv3.M()); // mass of KshortKshort pair
+      ROOT::Math::Boost boost{fourVecMother.BoostToCM()};                                                         // boost mother to center of mass frame
+      ROOT::Math::PxPyPzMVector fourVecDauCM = boost(fourVecDau);                                                 // boost the frame of daughter same as mother
+      ROOT::Math::XYZVector threeVecDauCM = fourVecDauCM.Vect();                                                  // get the 3 vector of daughter in the frame of mother
+
+      TRandom* rn = new TRandom();
+
       if (TMath::Abs(lv3.Rapidity() < 0.5)) {
+
         if (inv_mass1D) {
-          hglue.fill(HIST("h1glueInvMassDS"), lv3.M());
+          hglue.fill(HIST("h1glueInvMassRot"), lv3.M());
         }
 
-        hglue.fill(HIST("h3glueInvMassDS"), multiplicity, lv3.Pt(), lv3.M());
+        if (activateTHnSparseCosThStarHelicity) {
+          ROOT::Math::XYZVector helicityVec = fourVecMother.Vect(); // 3 vector of mother in COM frame
+          auto cosThetaStarHelicity = helicityVec.Dot(threeVecDauCM) / (std::sqrt(threeVecDauCM.Mag2()) * std::sqrt(helicityVec.Mag2()));
+          hglue.fill(HIST("h3glueInvMassDS"), multiplicity, lv3.Pt(), lv3.M(), cosThetaStarHelicity);
+          for (int i = 0; i < c_nof_rotations; i++) {
+            float theta2 = rn->Uniform(0, TMath::Pi());
+            lv4.SetPtEtaPhiM(v1.pt(), v1.eta(), v1.phi() + theta2, massK0s); // for rotated background
+            lv5 = lv2 + lv4;
+            hglue.fill(HIST("h3glueInvMassRot"), multiplicity, lv5.Pt(), lv5.M(), cosThetaStarHelicity);
+          }
+
+        } else if (activateTHnSparseCosThStarProduction) {
+          ROOT::Math::XYZVector normalVec = ROOT::Math::XYZVector(lv3.Py(), -lv3.Px(), 0.f);
+          auto cosThetaStarProduction = normalVec.Dot(threeVecDauCM) / (std::sqrt(threeVecDauCM.Mag2()) * std::sqrt(normalVec.Mag2()));
+          hglue.fill(HIST("h3glueInvMassDS"), multiplicity, lv3.Pt(), lv3.M(), cosThetaStarProduction);
+          for (int i = 0; i < c_nof_rotations; i++) {
+            float theta2 = rn->Uniform(0, TMath::Pi());
+            lv4.SetPtEtaPhiM(v1.pt(), v1.eta(), v1.phi() + theta2, massK0s); // for rotated background
+            lv5 = lv2 + lv4;
+            hglue.fill(HIST("h3glueInvMassRot"), multiplicity, lv5.Pt(), lv5.M(), cosThetaStarProduction);
+          }
+        } else if (activateTHnSparseCosThStarBeam) {
+          ROOT::Math::XYZVector beamVec = ROOT::Math::XYZVector(0.f, 0.f, 1.f);
+          auto cosThetaStarBeam = beamVec.Dot(threeVecDauCM) / std::sqrt(threeVecDauCM.Mag2());
+          hglue.fill(HIST("h3glueInvMassDS"), multiplicity, lv3.Pt(), lv3.M(), cosThetaStarBeam);
+          for (int i = 0; i < c_nof_rotations; i++) {
+            float theta2 = rn->Uniform(0, TMath::Pi());
+            lv4.SetPtEtaPhiM(v1.pt(), v1.eta(), v1.phi() + theta2, massK0s); // for rotated background
+            lv5 = lv2 + lv4;
+            hglue.fill(HIST("h3glueInvMassRot"), multiplicity, lv5.Pt(), lv5.M(), cosThetaStarBeam);
+          }
+        } else if (activateTHnSparseCosThStarRandom) {
+          ROOT::Math::XYZVector randomVec = ROOT::Math::XYZVector(std::sin(thetaRandom) * std::cos(phiRandom), std::sin(thetaRandom) * std::sin(phiRandom), std::cos(thetaRandom));
+          auto cosThetaStarRandom = randomVec.Dot(threeVecDauCM) / std::sqrt(threeVecDauCM.Mag2());
+          hglue.fill(HIST("h3glueInvMassDS"), multiplicity, lv3.Pt(), lv3.M(), cosThetaStarRandom);
+          for (int i = 0; i < c_nof_rotations; i++) {
+            float theta2 = rn->Uniform(0, TMath::Pi());
+            lv4.SetPtEtaPhiM(v1.pt(), v1.eta(), v1.phi() + theta2, massK0s); // for rotated background
+            lv5 = lv2 + lv4;
+            hglue.fill(HIST("h3glueInvMassRot"), multiplicity, lv5.Pt(), lv5.M(), cosThetaStarRandom);
+          }
+        }
       }
     }
   }
@@ -512,6 +620,7 @@ struct strangeness_tutorial {
         hglue.fill(HIST("heventscheck"), 5.5);
 
         float multiplicity = 0.0f;
+
         multiplicity = c1.centFT0M();
 
         if (!eventselection(c1, multiplicity) || !eventselection(c2, multiplicity)) {
@@ -541,21 +650,21 @@ struct strangeness_tutorial {
           if (negtrack1.globalIndex() == negtrack2.globalIndex()) {
             continue;
           }
-          double nTPCSigmaPos1[1]{postrack1.tpcNSigmaPi()};
-          double nTPCSigmaNeg1[1]{negtrack1.tpcNSigmaPi()};
-          double nTPCSigmaPos2[1]{postrack2.tpcNSigmaPi()};
-          double nTPCSigmaNeg2[1]{negtrack2.tpcNSigmaPi()};
+          double nTPCSigmaPos1{postrack1.tpcNSigmaPi()};
+          double nTPCSigmaNeg1{negtrack1.tpcNSigmaPi()};
+          double nTPCSigmaPos2{postrack2.tpcNSigmaPi()};
+          double nTPCSigmaNeg2{negtrack2.tpcNSigmaPi()};
 
-          if (!isSelectedV0Daughter(postrack1, 1, nTPCSigmaPos1[0], t1)) {
+          if (!isSelectedV0Daughter(postrack1, 1, nTPCSigmaPos1, t1)) {
             continue;
           }
-          if (!isSelectedV0Daughter(postrack2, 1, nTPCSigmaPos2[0], t2)) {
+          if (!isSelectedV0Daughter(postrack2, 1, nTPCSigmaPos2, t2)) {
             continue;
           }
-          if (!isSelectedV0Daughter(negtrack1, -1, nTPCSigmaNeg1[0], t1)) {
+          if (!isSelectedV0Daughter(negtrack1, -1, nTPCSigmaNeg1, t1)) {
             continue;
           }
-          if (!isSelectedV0Daughter(negtrack2, -1, nTPCSigmaNeg2[0], t2)) {
+          if (!isSelectedV0Daughter(negtrack2, -1, nTPCSigmaNeg2, t2)) {
             continue;
           }
 
@@ -565,12 +674,43 @@ struct strangeness_tutorial {
           lv1.SetPtEtaPhiM(t1.pt(), t1.eta(), t1.phi(), massK0s);
           lv2.SetPtEtaPhiM(t2.pt(), t2.eta(), t2.phi(), massK0s);
           lv3 = lv1 + lv2;
+
+          auto phiRandom = gRandom->Uniform(0.f, constants::math::TwoPI);
+          auto thetaRandom = gRandom->Uniform(0.f, constants::math::PI);
+          ROOT::Math::PxPyPzMVector fourVecDau = ROOT::Math::PxPyPzMVector(daughter1.Px(), daughter1.Py(), daughter1.Pz(), massK0s); // Kshort
+
+          ROOT::Math::PxPyPzMVector fourVecMother = ROOT::Math::PxPyPzMVector(lv3.Px(), lv3.Py(), lv3.Pz(), lv3.M()); // mass of KshortKshort pair
+          ROOT::Math::Boost boost{fourVecMother.BoostToCM()};                                                         // boost mother to center of mass frame
+          ROOT::Math::PxPyPzMVector fourVecDauCM = boost(fourVecDau);                                                 // boost the frame of daughter same as mother
+          ROOT::Math::XYZVector threeVecDauCM = fourVecDauCM.Vect();                                                  // get the 3 vector of daughter in the frame of mother
+
           if (TMath::Abs(lv3.Rapidity() < 0.5)) {
-            if (inv_mass1D) {
-              hglue.fill(HIST("h1glueInvMassME"), lv3.M());
+
+            if (activateTHnSparseCosThStarHelicity) {
+              ROOT::Math::XYZVector helicityVec = fourVecMother.Vect(); // 3 vector of mother in COM frame
+              auto cosThetaStarHelicity = helicityVec.Dot(threeVecDauCM) / (std::sqrt(threeVecDauCM.Mag2()) * std::sqrt(helicityVec.Mag2()));
+              hglue.fill(HIST("h3glueInvMassME"), multiplicity, lv3.Pt(), lv3.M(), cosThetaStarHelicity);
+            } else if (activateTHnSparseCosThStarProduction) {
+              ROOT::Math::XYZVector normalVec = ROOT::Math::XYZVector(lv3.Py(), -lv3.Px(), 0.f);
+              auto cosThetaStarProduction = normalVec.Dot(threeVecDauCM) / (std::sqrt(threeVecDauCM.Mag2()) * std::sqrt(normalVec.Mag2()));
+              hglue.fill(HIST("h3glueInvMassME"), multiplicity, lv3.Pt(), lv3.M(), cosThetaStarProduction);
+            } else if (activateTHnSparseCosThStarBeam) {
+              ROOT::Math::XYZVector beamVec = ROOT::Math::XYZVector(0.f, 0.f, 1.f);
+              auto cosThetaStarBeam = beamVec.Dot(threeVecDauCM) / std::sqrt(threeVecDauCM.Mag2());
+              hglue.fill(HIST("h3glueInvMassME"), multiplicity, lv3.Pt(), lv3.M(), cosThetaStarBeam);
+            } else if (activateTHnSparseCosThStarRandom) {
+              ROOT::Math::XYZVector randomVec = ROOT::Math::XYZVector(std::sin(thetaRandom) * std::cos(phiRandom), std::sin(thetaRandom) * std::sin(phiRandom), std::cos(thetaRandom));
+              auto cosThetaStarRandom = randomVec.Dot(threeVecDauCM) / std::sqrt(threeVecDauCM.Mag2());
+              hglue.fill(HIST("h3glueInvMassME"), multiplicity, lv3.Pt(), lv3.M(), cosThetaStarRandom);
             }
-            hglue.fill(HIST("h3glueInvMassME"), multiplicity, lv3.Pt(), lv3.M());
           }
+
+          // if (TMath::Abs(lv3.Rapidity() < 0.5)) {
+          //   if (inv_mass1D) {
+          //     hglue.fill(HIST("h1glueInvMassME"), lv3.M());
+          //   }
+          //   hglue.fill(HIST("h3glueInvMassME"), multiplicity, lv3.Pt(), lv3.M());
+          // }
         }
       }
     } else {
@@ -603,21 +743,21 @@ struct strangeness_tutorial {
           if (negtrack1.globalIndex() == negtrack2.globalIndex()) {
             continue;
           }
-          double nTPCSigmaPos1[1]{postrack1.tpcNSigmaPi()};
-          double nTPCSigmaNeg1[1]{negtrack1.tpcNSigmaPi()};
-          double nTPCSigmaPos2[1]{postrack2.tpcNSigmaPi()};
-          double nTPCSigmaNeg2[1]{negtrack2.tpcNSigmaPi()};
+          double nTPCSigmaPos1{postrack1.tpcNSigmaPi()};
+          double nTPCSigmaNeg1{negtrack1.tpcNSigmaPi()};
+          double nTPCSigmaPos2{postrack2.tpcNSigmaPi()};
+          double nTPCSigmaNeg2{negtrack2.tpcNSigmaPi()};
 
-          if (!isSelectedV0Daughter(postrack1, 1, nTPCSigmaPos1[0], t1)) {
+          if (!isSelectedV0Daughter(postrack1, 1, nTPCSigmaPos1, t1)) {
             continue;
           }
-          if (!isSelectedV0Daughter(postrack2, 1, nTPCSigmaPos2[0], t2)) {
+          if (!isSelectedV0Daughter(postrack2, 1, nTPCSigmaPos2, t2)) {
             continue;
           }
-          if (!isSelectedV0Daughter(negtrack1, -1, nTPCSigmaNeg1[0], t1)) {
+          if (!isSelectedV0Daughter(negtrack1, -1, nTPCSigmaNeg1, t1)) {
             continue;
           }
-          if (!isSelectedV0Daughter(negtrack2, -1, nTPCSigmaNeg2[0], t2)) {
+          if (!isSelectedV0Daughter(negtrack2, -1, nTPCSigmaNeg2, t2)) {
             continue;
           }
 
@@ -625,12 +765,47 @@ struct strangeness_tutorial {
           lv1.SetPtEtaPhiM(t1.pt(), t1.eta(), t1.phi(), massK0s);
           lv2.SetPtEtaPhiM(t2.pt(), t2.eta(), t2.phi(), massK0s);
           lv3 = lv1 + lv2;
+
+          auto phiRandom = gRandom->Uniform(0.f, constants::math::TwoPI);
+          auto thetaRandom = gRandom->Uniform(0.f, constants::math::PI);
+          ROOT::Math::PxPyPzMVector fourVecDau = ROOT::Math::PxPyPzMVector(daughter1.Px(), daughter1.Py(), daughter1.Pz(), massK0s); // Kshort
+
+          ROOT::Math::PxPyPzMVector fourVecMother = ROOT::Math::PxPyPzMVector(lv3.Px(), lv3.Py(), lv3.Pz(), lv3.M()); // mass of KshortKshort pair
+          ROOT::Math::Boost boost{fourVecMother.BoostToCM()};                                                         // boost mother to center of mass frame
+          ROOT::Math::PxPyPzMVector fourVecDauCM = boost(fourVecDau);                                                 // boost the frame of daughter same as mother
+          ROOT::Math::XYZVector threeVecDauCM = fourVecDauCM.Vect();                                                  // get the 3 vector of daughter in the frame of mother
+
           if (TMath::Abs(lv3.Rapidity() < 0.5)) {
-            if (inv_mass1D) {
-              hglue.fill(HIST("h1glueInvMassME"), lv3.M());
+
+            if (activateTHnSparseCosThStarHelicity) {
+              ROOT::Math::XYZVector helicityVec = fourVecMother.Vect(); // 3 vector of mother in COM frame
+              auto cosThetaStarHelicity = helicityVec.Dot(threeVecDauCM) / (std::sqrt(threeVecDauCM.Mag2()) * std::sqrt(helicityVec.Mag2()));
+              hglue.fill(HIST("h3glueInvMassME"), multiplicity, lv3.Pt(), lv3.M(), cosThetaStarHelicity);
+            } else if (activateTHnSparseCosThStarProduction) {
+              ROOT::Math::XYZVector normalVec = ROOT::Math::XYZVector(lv3.Py(), -lv3.Px(), 0.f);
+              auto cosThetaStarProduction = normalVec.Dot(threeVecDauCM) / (std::sqrt(threeVecDauCM.Mag2()) * std::sqrt(normalVec.Mag2()));
+              hglue.fill(HIST("h3glueInvMassME"), multiplicity, lv3.Pt(), lv3.M(), cosThetaStarProduction);
+            } else if (activateTHnSparseCosThStarBeam) {
+              ROOT::Math::XYZVector beamVec = ROOT::Math::XYZVector(0.f, 0.f, 1.f);
+              auto cosThetaStarBeam = beamVec.Dot(threeVecDauCM) / std::sqrt(threeVecDauCM.Mag2());
+              hglue.fill(HIST("h3glueInvMassME"), multiplicity, lv3.Pt(), lv3.M(), cosThetaStarBeam);
+            } else if (activateTHnSparseCosThStarRandom) {
+              ROOT::Math::XYZVector randomVec = ROOT::Math::XYZVector(std::sin(thetaRandom) * std::cos(phiRandom), std::sin(thetaRandom) * std::sin(phiRandom), std::cos(thetaRandom));
+              auto cosThetaStarRandom = randomVec.Dot(threeVecDauCM) / std::sqrt(threeVecDauCM.Mag2());
+              hglue.fill(HIST("h3glueInvMassME"), multiplicity, lv3.Pt(), lv3.M(), cosThetaStarRandom);
             }
-            hglue.fill(HIST("h3glueInvMassME"), multiplicity, lv3.Pt(), lv3.M());
           }
+
+          // TLorentzVector lv1, lv2, lv3;
+          // lv1.SetPtEtaPhiM(t1.pt(), t1.eta(), t1.phi(), massK0s);
+          // lv2.SetPtEtaPhiM(t2.pt(), t2.eta(), t2.phi(), massK0s);
+          // lv3 = lv1 + lv2;
+          // if (TMath::Abs(lv3.Rapidity() < 0.5)) {
+          //   if (inv_mass1D) {
+          //     hglue.fill(HIST("h1glueInvMassME"), lv3.M());
+          //   }
+          //   hglue.fill(HIST("h3glueInvMassME"), multiplicity, lv3.Pt(), lv3.M());
+          // }
         }
       }
     }
