@@ -366,7 +366,7 @@ struct lnnRecoTask {
       }
 
       // Definition of lnn mass
-      float mLNN_HypHI = 2.99; // 2993.7 MeV/c**2
+      float mLNN_HypHI = 2993.70; // 2993.7 MeV/c**2
       float massLNNL = std::sqrt(h3lE * h3lE - lnnMom[0] * lnnMom[0] - lnnMom[1] * lnnMom[1] - lnnMom[2] * lnnMom[2]);
       bool isLNNMass = false;
       if (massLNNL > mLNN_HypHI - masswidth && massLNNL < mLNN_HypHI + masswidth) {
