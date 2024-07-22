@@ -117,7 +117,7 @@ struct lnnRecoTask {
   Configurable<float> masswidth{"lnnmasswidth", 0.06, "Mass width (GeV/c^2)"};
   Configurable<float> dcav0dau{"lnndcaDau", 1.0, "DCA V0 Daughters"};
   Configurable<float> ptMin{"ptMin", 0.5, "Minimum pT of the lnncandidate"};
-  Configurable<float> TPCRigidityMin3H{"TPCRigidityMin3H", 0.5, "Minimum rigidity of the triton candidate"};
+  Configurable<float> TPCRigidityMin3H{"TPCRigidityMin3H", 1, "Minimum rigidity of the triton candidate"};
   Configurable<float> etaMax{"eta", 1., "eta daughter"};
   Configurable<float> nSigmaMax3H{"nSigmaMax3H", 5, "triton dEdx cut (n sigma)"};
   Configurable<float> nTPCClusMin3H{"nTPCClusMin3H", 80, "triton NTPC clusters cut"};
@@ -505,6 +505,8 @@ struct lnnRecoTask {
   void processMC(CollisionsFullMC const& collisions, aod::McCollisions const& mcCollisions, aod::V0s const& V0s, TracksFull const& tracks, aod::BCsWithTimestamps const&, aod::McTrackLabels const& trackLabelsMC, aod::McParticles const& particlesMC)
   {
     filledMothers.clear();
+    
+    isGoodCollision.clear();
     isGoodCollision.resize(mcCollisions.size(), false);
 
     for (const auto& collision : collisions) {
@@ -514,7 +516,7 @@ struct lnnRecoTask {
 
       hEvents->Fill(0.);
 
-      if (std::abs(collision.posZ()) > 10) {
+      if (std::abs(!collision.sel8() || collision.posZ()) > 10) {
         continue;
       }
       hEvents->Fill(1.);
