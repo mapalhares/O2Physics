@@ -505,7 +505,7 @@ struct lnnRecoTask {
   {
     filledMothers.clear();
     isGoodCollision.clear()
-    isGoodCollision.resize(mcCollisions.size(), false);
+      isGoodCollision.resize(mcCollisions.size(), false);
 
     for (const auto& collision : collisions) {
       lnnCandidates.clear();
