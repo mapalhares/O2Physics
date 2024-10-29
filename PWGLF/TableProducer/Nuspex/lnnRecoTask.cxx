@@ -753,4 +753,3 @@ WorkflowSpec
   return WorkflowSpec{
     adaptAnalysisTask<lnnRecoTask>(cfgc)};
 }
- 
