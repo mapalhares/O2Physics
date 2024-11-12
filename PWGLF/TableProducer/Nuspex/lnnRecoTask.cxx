@@ -14,7 +14,7 @@
 #include <array>
 #include <memory>
 #include <string>
-#include <vector> 
+#include <vector>
 #include <algorithm>
 
 #include <TLorentzVector.h>
