@@ -13,7 +13,7 @@
 /// ///        Invariant Mass Reconstruction of Lambda(1520) Resonance.
 ///
 /// \author Yash Patley <yash.patley@cern.ch>
-///  \author Nasir Mehdi Malik
+/// \author Nasir Mehdi Malik
 
 #include <Framework/ASoA.h>
 #include <Framework/AnalysisDataModel.h>
@@ -21,6 +21,7 @@
 #include <Framework/HistogramSpec.h>
 #include <TLorentzVector.h>
 #include <TRandom.h>
+#include <fairlogger/Logger.h>
 
 #include "Common/DataModel/PIDResponse.h"
 #include "Common/DataModel/Centrality.h"
@@ -29,7 +30,6 @@
 #include "Framework/ASoAHelpers.h"
 #include "Framework/runDataProcessing.h"
 #include "PWGLF/DataModel/LFResonanceTables.h"
-#include "PWGLF/DataModel/LFResonanceTablesMergeDF.h"
 #include "CommonConstants/PhysicsConstants.h"
 
 using namespace o2;
@@ -42,6 +42,8 @@ struct lambdaAnalysis_pb {
   Preslice<aod::ResoTracks> perRCol = aod::resodaughter::resoCollisionId;
   Preslice<aod::Tracks> perCollision = aod::track::collisionId;
   // Configurables.
+
+  Configurable<bool> ConfEvtOccupancyInTimeRange{"ConfEvtOccupancyInTimeRange", false, "occupancy selection true or false"};
   Configurable<int> nBinsPt{"nBinsPt", 100, "N bins in pT histogram"};
   Configurable<int> nBinsInvM{"nBinsInvM", 120, "N bins in InvMass histogram"};
   Configurable<int> lambda1520id{"lambda1520id", 3124, "pdg"};
@@ -104,7 +106,7 @@ struct lambdaAnalysis_pb {
   ConfigurableAxis cMixVtxBins{"cMixVtxBins", {VARIABLE_WIDTH, -10.0f, -9.f, -8.f, -7.f, -6.f, -5.f, -4.f, -3.f, -2.f, -1.f, 0.f, 1.f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f, 8.f, 9.f, 10.f}, "Mixing bins - z-vertex"};
   ConfigurableAxis cMixMultBins{"cMixMultBins", {VARIABLE_WIDTH, 0.0f, 10.0f, 20.0f, 30.0f, 40.0f, 50.0f, 60.0f, 70.0f, 80.0f, 90.0f, 100.0f, 200.0f}, "Mixing bins - multiplicity"};
   ConfigurableAxis cMixEPAngle{"cMixEPAngle", {VARIABLE_WIDTH, -1.5708f, -1.25664f, -0.942478f, -0.628319f, 0.f, 0.628319f, 0.942478f, 1.25664f, 1.5708f}, "event plane"};
-
+  ConfigurableAxis occupancy_bins{"occupancy_bins", {VARIABLE_WIDTH, 0.0, 100, 500, 600, 1000, 1100, 1500, 1600, 2000, 2100, 2500, 2600, 3000, 3100, 3500, 3600, 4000, 4100, 4500, 4600, 5000, 5100, 9999}, "Binning of the occupancy axis"};
   // Histogram Registry.
   HistogramRegistry histos{"histos", {}, OutputObjHandlingPolicy::AnalysisObject};
 
@@ -124,8 +126,9 @@ struct lambdaAnalysis_pb {
     const AxisSpec axisVz(120, -12, 12, {"vz"});
     const AxisSpec axisEP(120, -3.14, 3.14, {"#theta"});
     const AxisSpec axisInvM(nBinsInvM, 1.44, 2.04, {"M_{inv} (GeV/c^{2})"});
+    AxisSpec axisOccupancy = {occupancy_bins, "Occupancy [-40,100]"};
 
-    histos.add("Event/h1d_ft0_mult_percentile", "FT0 (%)", kTH1F, {axisCent});
+    histos.add("Event/h1d_ft0_mult_percentile", "FT0 (%)", kTH2F, {axisCent, axisOccupancy});
     if (doprocessMix || doprocessMixDF || doprocessMixepDF) {
       histos.add("Event/mixing_vzVsmultpercentile", "FT0(%)", kTH3F, {axisCent, axisVz, axisEP});
     }
@@ -138,7 +141,7 @@ struct lambdaAnalysis_pb {
     histos.add("QAbefore/Kaon/h2d_ka_nsigma_tof_vs_tpc", "n#sigma^{TPC} vs n#sigma^{TOF} Kaons", kTH2F, {axisTPCNsigma, axisTOFNsigma});
 
     // QA After
-    histos.add("QAafter/Proton/hd_pr_pt", "p_{T}-spectra Protons", kTH1F, {axisPt_pid});
+    histos.add("QAafter/Proton/hd_pr_pt", "p_{T}-spectra Protons", kTH2F, {axisPt_pid, axisCent});
     histos.add("QAafter/Proton/h2d_pr_dca_z", "dca_{z} Protons", kTH2F, {axisPt_pid, axisDCAz});
     histos.add("QAafter/Proton/h2d_pr_dca_xy", "dca_{xy} Protons", kTH2F, {axisPt_pid, axisDCAxy});
     histos.add("QAafter/Proton/h2d_pr_dEdx_p", "TPC Signal Protons", kTH2F, {axisP_pid, axisdEdx});
@@ -153,7 +156,7 @@ struct lambdaAnalysis_pb {
     histos.add("QAafter/Proton/h2d_Prka_nsigma_tof_p", " Protons kaon", kTH2F, {axisP_pid, axisTOFNsigma});
     histos.add("QAafter/Proton/h2d_Prel_nsigma_tof_p", " Protons electron", kTH2F, {axisP_pid, axisTOFNsigma});
     histos.add("QAafter/Proton/h2d_pr_nsigma_tof_vs_tpc", "n#sigma(TOF) vs n#sigma(TPC) Protons", kTH2F, {axisTPCNsigma, axisTOFNsigma});
-    histos.add("QAafter/Kaon/hd_ka_pt", "p_{T}-spectra Kaons", kTH1F, {axisPt_pid});
+    histos.add("QAafter/Kaon/hd_ka_pt", "p_{T}-spectra Kaons", kTH2F, {axisPt_pid, axisCent});
     histos.add("QAafter/Kaon/h2d_ka_dca_z", "dca_{z} Kaons", kTH2F, {axisPt_pid, axisDCAz});
     histos.add("QAafter/Kaon/h2d_ka_dca_xy", "dca_{xy} Kaons", kTH2F, {axisPt_pid, axisDCAxy});
     histos.add("QAafter/Kaon/h2d_ka_dEdx_p", "TPC Signal Kaon", kTH2F, {axisP_pid, axisdEdx});
@@ -172,15 +175,15 @@ struct lambdaAnalysis_pb {
     // Analysis
     // Lambda Invariant Mass
     if (!doprocessMC) {
-      histos.add("Analysis/h4d_lstar_invm_US_PM", "THn #Lambda(1520)", kTHnSparseF, {axisInvM, axisPt, axisCent});
-      histos.add("Analysis/h4d_lstar_invm_US_MP", "THn #bar #Lambda(1520)", kTHnSparseF, {axisInvM, axisPt, axisCent});
-      histos.add("Analysis/h4d_lstar_invm_PP", "THn Like Signs p K^{+}", kTHnSparseF, {axisInvM, axisPt, axisCent});
-      histos.add("Analysis/h4d_lstar_invm_MM", "THn Like Signs #bar{p} K^{-}", kTHnSparseF, {axisInvM, axisPt, axisCent});
-      histos.add("Analysis/h4d_lstar_invm_rot", "THn Rotated", kTHnSparseF, {axisInvM, axisPt, axisCent});
-      histos.add("Analysis/h4d_lstar_invm_US_PM_mix", "THn Mixed Events", kTHnSparseF, {axisInvM, axisPt, axisCent});
-      histos.add("Analysis/h4d_lstar_invm_US_MP_mix", "THn anti Mixed Events", kTHnSparseF, {axisInvM, axisPt, axisCent});
-      histos.add("Analysis/h4d_lstar_invm_LS_PP_mix", "THn Mixed Events PP", kTHnSparseF, {axisInvM, axisPt, axisCent});
-      histos.add("Analysis/h4d_lstar_invm_LS_MM_mix", "THn Mixed Events MM", kTHnSparseF, {axisInvM, axisPt, axisCent});
+      histos.add("Analysis/h4d_lstar_invm_US_PM", "THn #Lambda(1520)", kTHnSparseF, {axisInvM, axisPt, axisCent, axisOccupancy});
+      histos.add("Analysis/h4d_lstar_invm_US_MP", "THn #bar #Lambda(1520)", kTHnSparseF, {axisInvM, axisPt, axisCent, axisOccupancy});
+      histos.add("Analysis/h4d_lstar_invm_PP", "THn Like Signs p K^{+}", kTHnSparseF, {axisInvM, axisPt, axisCent, axisOccupancy});
+      histos.add("Analysis/h4d_lstar_invm_MM", "THn Like Signs #bar{p} K^{-}", kTHnSparseF, {axisInvM, axisPt, axisCent, axisOccupancy});
+      histos.add("Analysis/h4d_lstar_invm_rot", "THn Rotated", kTHnSparseF, {axisInvM, axisPt, axisCent, axisOccupancy});
+      histos.add("Analysis/h4d_lstar_invm_US_PM_mix", "THn Mixed Events", kTHnSparseF, {axisInvM, axisPt, axisCent, axisOccupancy});
+      histos.add("Analysis/h4d_lstar_invm_US_MP_mix", "THn anti Mixed Events", kTHnSparseF, {axisInvM, axisPt, axisCent, axisOccupancy});
+      histos.add("Analysis/h4d_lstar_invm_LS_PP_mix", "THn Mixed Events PP", kTHnSparseF, {axisInvM, axisPt, axisCent, axisOccupancy});
+      histos.add("Analysis/h4d_lstar_invm_LS_MM_mix", "THn Mixed Events MM", kTHnSparseF, {axisInvM, axisPt, axisCent, axisOccupancy});
     }
     // MC
     if (doprocessMC) {
@@ -364,7 +367,7 @@ struct lambdaAnalysis_pb {
   }
 
   template <bool mix, bool mc, typename trackType>
-  void fillDataHistos(trackType const& trk1, trackType const& trk2, float const& mult)
+  void fillDataHistos(trackType const& trk1, trackType const& trk2, float mult, int occup = 100)
   {
 
     TLorentzVector p1, p2, p;
@@ -427,7 +430,7 @@ struct lambdaAnalysis_pb {
         auto _tpcnsigmaPr = trkPr.tpcNSigmaPr();
 
         // Proton
-        histos.fill(HIST("QAafter/Proton/hd_pr_pt"), _ptPr);
+        histos.fill(HIST("QAafter/Proton/hd_pr_pt"), _ptPr, mult);
         histos.fill(HIST("QAafter/Proton/h2d_pr_dca_z"), _ptPr, trkPr.dcaZ());
         histos.fill(HIST("QAafter/Proton/h2d_pr_dca_xy"), _ptPr, trkPr.dcaXY());
         histos.fill(HIST("QAafter/Proton/h2d_pr_dEdx_p"), p_ptot, trkPr.tpcSignal());
@@ -449,7 +452,7 @@ struct lambdaAnalysis_pb {
         auto _tpcnsigmaKa = trkKa.tpcNSigmaKa();
 
         // Kaon
-        histos.fill(HIST("QAafter/Kaon/hd_ka_pt"), _ptKa);
+        histos.fill(HIST("QAafter/Kaon/hd_ka_pt"), _ptKa, mult);
         histos.fill(HIST("QAafter/Kaon/h2d_ka_dca_z"), _ptKa, trkKa.dcaZ());
         histos.fill(HIST("QAafter/Kaon/h2d_ka_dca_xy"), _ptKa, trkKa.dcaXY());
         histos.fill(HIST("QAafter/Kaon/h2d_ka_dEdx_p"), k_ptot, trkKa.tpcSignal());
@@ -495,22 +498,22 @@ struct lambdaAnalysis_pb {
       if constexpr (!mix && !mc) {
         if (trkPr.sign() * trkKa.sign() < 0) {
           if (trkPr.sign() > 0)
-            histos.fill(HIST("Analysis/h4d_lstar_invm_US_PM"), _M, _pt, mult);
+            histos.fill(HIST("Analysis/h4d_lstar_invm_US_PM"), _M, _pt, mult, occup);
           else
-            histos.fill(HIST("Analysis/h4d_lstar_invm_US_MP"), _M, _pt, mult);
+            histos.fill(HIST("Analysis/h4d_lstar_invm_US_MP"), _M, _pt, mult, occup);
           if (doRotate) {
             float theta = rn->Uniform(1.56, 1.58);
             p1.RotateZ(theta);
             p = p1 + p2;
             if (std::abs(p.Rapidity()) < 0.5) {
-              histos.fill(HIST("Analysis/h4d_lstar_invm_rot"), p.M(), p.Pt(), mult);
+              histos.fill(HIST("Analysis/h4d_lstar_invm_rot"), p.M(), p.Pt(), mult, occup);
             }
           }
         } else {
           if (trkPr.sign() > 0) {
-            histos.fill(HIST("Analysis/h4d_lstar_invm_PP"), _M, _pt, mult);
+            histos.fill(HIST("Analysis/h4d_lstar_invm_PP"), _M, _pt, mult, occup);
           } else {
-            histos.fill(HIST("Analysis/h4d_lstar_invm_MM"), _M, _pt, mult);
+            histos.fill(HIST("Analysis/h4d_lstar_invm_MM"), _M, _pt, mult, occup);
           }
         }
       }
@@ -518,14 +521,14 @@ struct lambdaAnalysis_pb {
       if constexpr (mix) {
         if (trkPr.sign() * trkKa.sign() < 0) {
           if (trkPr.sign() > 0)
-            histos.fill(HIST("Analysis/h4d_lstar_invm_US_PM_mix"), _M, _pt, mult);
+            histos.fill(HIST("Analysis/h4d_lstar_invm_US_PM_mix"), _M, _pt, mult, occup);
           else
-            histos.fill(HIST("Analysis/h4d_lstar_invm_US_MP_mix"), _M, _pt, mult);
+            histos.fill(HIST("Analysis/h4d_lstar_invm_US_MP_mix"), _M, _pt, mult, occup);
         } else {
           if (trkPr.sign() > 0)
-            histos.fill(HIST("Analysis/h4d_lstar_invm_LS_PP_mix"), _M, _pt, mult);
+            histos.fill(HIST("Analysis/h4d_lstar_invm_LS_PP_mix"), _M, _pt, mult, occup);
           else
-            histos.fill(HIST("Analysis/h4d_lstar_invm_LS_MM_mix"), _M, _pt, mult);
+            histos.fill(HIST("Analysis/h4d_lstar_invm_LS_MM_mix"), _M, _pt, mult, occup);
         }
       }
 
@@ -558,7 +561,7 @@ struct lambdaAnalysis_pb {
   {
 
     // LOGF(info, " collisions: Index = %d %d", collision.globalIndex(),tracks.size());
-    histos.fill(HIST("Event/h1d_ft0_mult_percentile"), collision.cent());
+    histos.fill(HIST("Event/h1d_ft0_mult_percentile"), collision.cent(), 100);
     fillDataHistos<false, false>(tracks, tracks, collision.cent());
   }
 
@@ -597,7 +600,6 @@ struct lambdaAnalysis_pb {
     }
 
     for (auto const& part : resoParents) {
-
       if (abs(part.pdgCode()) != lambda1520id) // // L* pdg_code = 3124
         continue;
       if (abs(part.y()) > 0.5) { // rapidity cut
@@ -616,7 +618,10 @@ struct lambdaAnalysis_pb {
 
       if (!pass1 || !pass2) // If we have both decay products
         continue;
-      auto mass = 1.520; // part.M()
+
+      TLorentzVector p4;
+      p4.SetPxPyPzE(part.px(), part.py(), part.pz(), part.e());
+      auto mass = p4.M();
       if (part.pdgCode() > 0)
         histos.fill(HIST("Analysis/h3d_gen_lstar_PM"), mass, part.pt(), mult);
       else
@@ -637,7 +642,6 @@ struct lambdaAnalysis_pb {
 
     SameKindPair<resoCols, resoTracks, BinningType2> pairs{binningPositions2, cNumMixEv, -1, collisions, tracksTuple, &cache}; // -1 is the number of the bin to skip
     for (auto& [c1, t1, c2, t2] : pairs) {
-
       // LOGF(info, "processMCMixedDerived: Mixed collisions : %d (%.3f, %.3f,%d), %d (%.3f, %.3f,%d)",c1.globalIndex(), c1.posZ(), c1.cent(),c1.mult(), c2.globalIndex(), c2.posZ(), c2.cent(),c2.mult());
       histos.fill(HIST("Event/mixing_vzVsmultpercentile"), c1.cent(), c1.posZ(), c1.evtPl());
       fillDataHistos<true, false>(t1, t2, c1.cent());
@@ -646,7 +650,7 @@ struct lambdaAnalysis_pb {
 
   PROCESS_SWITCH(lambdaAnalysis_pb, processMix, "Process for Mixed Events", false);
 
-  Preslice<aod::ResoTrackDFs> perRColdf = aod::resodaughterdf::resoCollisiondfId;
+  Preslice<aod::ResoTrackDFs> perRColdf = aod::resodaughter::resoCollisionDFId;
 
   using resoColDFs = aod::ResoCollisionDFs;
   using resoTrackDFs = aod::ResoTrackDFs;
@@ -656,15 +660,18 @@ struct lambdaAnalysis_pb {
 
     if (doprocessData)
       LOG(error) << "Disable processData() first!";
+    auto _occup = 100;
+    if (ConfEvtOccupancyInTimeRange)
+      _occup = collision.trackOccupancyInTimeRange();
 
     // LOGF(info, "inside df collisions: Index = %d %d", collision.globalIndex(),tracks.size());
-    histos.fill(HIST("Event/h1d_ft0_mult_percentile"), collision.cent());
-    fillDataHistos<false, false>(tracks, tracks, collision.cent());
+    histos.fill(HIST("Event/h1d_ft0_mult_percentile"), collision.cent(), _occup);
+    fillDataHistos<false, false>(tracks, tracks, collision.cent(), _occup);
   }
 
   PROCESS_SWITCH(lambdaAnalysis_pb, processDatadf, "Process for data merged DF", false);
 
-  using BinningTypeDF = ColumnBinningPolicy<aod::collision::PosZ, aod::resocollisiondf::Cent>;
+  using BinningTypeDF = ColumnBinningPolicy<aod::collision::PosZ, aod::resocollision::Cent>;
   void processMixDF(resoColDFs& collisions, resoTrackDFs const& tracks)
   {
     if (doprocessMix)
@@ -676,28 +683,29 @@ struct lambdaAnalysis_pb {
 
     SameKindPair<resoColDFs, resoTrackDFs, BinningTypeDF> pairs{binningPositions2, cNumMixEv, -1, collisions, tracksTuple, &cache}; // -1 is the number of the bin to skip
     for (auto& [c1, t1, c2, t2] : pairs) {
+      auto _occup = 100;
+      if (ConfEvtOccupancyInTimeRange)
+        _occup = c1.trackOccupancyInTimeRange();
 
       // LOGF(info, "processMCMixedDerived: Mixed collisions : %d (%.3f, %.3f,%d), %d (%.3f, %.3f,%d)",c1.globalIndex(), c1.posZ(), c1.cent(),c1.mult(), c2.globalIndex(), c2.posZ(), c2.cent(),c2.mult());
       histos.fill(HIST("Event/mixing_vzVsmultpercentile"), c1.cent(), c1.posZ(), c1.evtPl());
-      fillDataHistos<true, false>(t1, t2, c1.cent());
+      fillDataHistos<true, false>(t1, t2, c1.cent(), _occup);
     }
   }
 
   PROCESS_SWITCH(lambdaAnalysis_pb, processMixDF, "Process for merged DF  Mixed Events", false);
 
-  using BinningTypeEP = ColumnBinningPolicy<aod::collision::PosZ, aod::resocollisiondf::Cent, aod::resocollisiondf::EvtPl>;
+  using BinningTypeEP = ColumnBinningPolicy<aod::collision::PosZ, aod::resocollision::Cent, aod::resocollision::EvtPl>;
   void processMixepDF(resoColDFs& collisions, resoTrackDFs const& tracks)
   {
     if (doprocessMix || doprocessMixDF)
       LOG(fatal) << "Disable processMix() or processMixDF() first!";
     LOGF(debug, "Event Mixing Started");
-
     BinningTypeEP binningPositions2{{cMixVtxBins, cMixMultBins, cMixEPAngle}, true};
     auto tracksTuple = std::make_tuple(tracks);
 
     SameKindPair<resoColDFs, resoTrackDFs, BinningTypeEP> pairs{binningPositions2, cNumMixEv, -1, collisions, tracksTuple, &cache}; // -1 is the number of the bin to skip
     for (auto& [c1, t1, c2, t2] : pairs) {
-
       //  LOGF(info, "processMCMixedDerived: Mixed collisions : %d (%.3f, %.3f,%.3f), %d (%.3f, %.3f, %.3f)",c1.globalIndex(), c1.posZ(), c1.cent(),c1.evtPl(), c2.globalIndex(), c2.posZ(), c2.cent(),c2.evtPl());
       histos.fill(HIST("Event/mixing_vzVsmultpercentile"), c1.cent(), c1.posZ(), c1.evtPl());
       fillDataHistos<true, false>(t1, t2, c1.cent());

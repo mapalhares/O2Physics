@@ -18,6 +18,7 @@
 #include <cstdint>
 #include <vector>
 #include <bitset>
+#include <string>
 #include "TRandom3.h"
 #include "Framework/AnalysisTask.h"
 #include "Framework/runDataProcessing.h"
@@ -231,13 +232,19 @@ struct femtoDreamPairTaskTrackTrack {
 
   void init(InitContext& context)
   {
+
+    // setup columnpolicy for binning
+    colBinningMult = {{Mixing.VztxMixBins, Mixing.MultMixBins}, true};
+    colBinningMultPercentile = {{Mixing.VztxMixBins, Mixing.MultPercentileMixBins}, true};
+    colBinningMultMultPercentile = {{Mixing.VztxMixBins, Mixing.MultMixBins, Mixing.MultPercentileMixBins}, true};
+
     if (Option.RandomizePair.value) {
       random = new TRandom3(0);
     }
     eventHisto.init(&Registry, Option.IsMC);
-    trackHistoPartOne.init(&Registry, Binning.multTempFit, Option.Dummy, Binning.TrackpT, Option.Dummy, Option.Dummy, Binning.TempFitVar, Option.Dummy, Option.Dummy, Option.Dummy, Option.Dummy, Option.Dummy, Option.IsMC, Track1.PDGCode);
+    trackHistoPartOne.init(&Registry, Binning.multTempFit, Option.Dummy, Binning.TrackpT, Option.Dummy, Option.Dummy, Binning.TempFitVar, Option.Dummy, Option.Dummy, Option.Dummy, Option.Dummy, Option.Dummy, Option.Dummy, Option.IsMC, Track1.PDGCode);
     if (!Option.SameSpecies) {
-      trackHistoPartTwo.init(&Registry, Binning.multTempFit, Option.Dummy, Binning.TrackpT, Option.Dummy, Option.Dummy, Binning.TempFitVar, Option.Dummy, Option.Dummy, Option.Dummy, Option.Dummy, Option.Dummy, Option.IsMC, Track2.PDGCode);
+      trackHistoPartTwo.init(&Registry, Binning.multTempFit, Option.Dummy, Binning.TrackpT, Option.Dummy, Option.Dummy, Binning.TempFitVar, Option.Dummy, Option.Dummy, Option.Dummy, Option.Dummy, Option.Dummy, Option.Dummy, Option.IsMC, Track2.PDGCode);
     }
 
     sameEventCont.init(&Registry,
