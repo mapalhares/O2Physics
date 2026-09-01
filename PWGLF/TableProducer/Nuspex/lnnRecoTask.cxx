@@ -19,8 +19,8 @@
 #include "Common/Core/RecoDecay.h"
 #include "Common/Core/trackUtilities.h"
 #include "Common/DataModel/Centrality.h"
-#include "Common/DataModel/Multiplicity.h"
 #include "Common/DataModel/EventSelection.h"
+#include "Common/DataModel/Multiplicity.h"
 #include "Common/DataModel/PIDResponseTOF.h"
 #include "Common/DataModel/TrackSelectionTables.h"
 
@@ -67,7 +67,7 @@ using std::array;
 using TracksFull = soa::Join<aod::TracksIU, aod::TracksExtra, o2::aod::TrackSelection, aod::TracksCovIU, aod::pidTOFFullTr, aod::pidTOFbeta, aod::pidTOFmass, aod::TracksDCA, aod::Tracks>;
 using TracksFullMC = soa::Join<aod::TracksIU, aod::TracksExtra, o2::aod::TrackSelection, aod::TracksCovIU, aod::pidTOFFullTr, aod::pidTOFbeta, aod::pidTOFmass, aod::McTrackLabels>;
 using CollisionsFull = soa::Join<aod::Collisions, aod::EvSels, aod::CentFT0As, aod::CentFT0Cs, aod::CentFT0Ms, aod::CentFV0As, aod::MultsGlobal>;
-using CollisionsFullMC = soa::Join<aod::Collisions, aod::McCollisionLabels, aod::EvSels, aod::CentFT0As, aod::CentFT0Cs, aod::CentFT0Ms, aod::CentFV0As, aod::MultsGlobal >;
+using CollisionsFullMC = soa::Join<aod::Collisions, aod::McCollisionLabels, aod::EvSels, aod::CentFT0As, aod::CentFT0Cs, aod::CentFT0Ms, aod::CentFV0As, aod::MultsGlobal>;
 
 using CollisionCandidates = o2::soa::Join<o2::aod::Collisions, o2::aod::EvSels, aod::CentFT0Cs>;
 using CollisionCandidatesMC = o2::soa::Join<o2::aod::Collisions, o2::aod::EvSels, aod::CentFT0Cs, o2::aod::McCollisionLabels>;
@@ -132,7 +132,7 @@ std::shared_ptr<TH2> h2FT0CPtGenColRecPiStrMC;
 std::shared_ptr<TH2> h2FT0CPtGenColGenCandMC;
 std::shared_ptr<TH2> h2FT0CPtGenColGenTrStrMC;
 std::shared_ptr<TH2> h2FT0CPtGenColGenPiStrMC;
-// Event and signal loss 
+// Event and signal loss
 std::shared_ptr<TH1> hEvtMC;
 std::shared_ptr<TH1> hImpactParamGen;
 std::shared_ptr<TH1> hImpactParamGenOneReco;
@@ -380,7 +380,6 @@ struct LnnRecoTask {
     const AxisSpec multAxis = {binsMult, "Multiplicity #eta <0.5"};
     const AxisSpec globalTrackMultAxis = {binsglobalTrackMult, "N_{global track mult.}"};
 
-
     hNsigma3HSel = qaRegistry.add<TH2>("PID/hNsigma3HSel", ";#it{p}^{TPC}/z (GeV/#it{c}); n_{#sigma} ({}^{3}H)", HistType::kTH2F, {rigidityAxis, nSigma3HtpcAxis});
     hNsigma3HSelTOF = qaRegistry.add<TH2>("PID/hNsigma3HSelTOF", ";#it{p}_{T} (GeV/#it{c}); n_{#sigma} ({}^{3}H)", HistType::kTH2F, {tPtAxis, nSigma3HtpcAxis});
     h2Nsigma3HSelTPCTOF = qaRegistry.add<TH2>("PID/h2Nsigma3HSelTPCTOF", ";n_{#sigma TPC} ({}^{3}H); n_{#sigma TOF} ({}^{3}H)", HistType::kTH2F, {nSigma3HtpcAxis, nSigma3HtofAxis});
@@ -399,7 +398,7 @@ struct LnnRecoTask {
     hCentFT0C = qaRegistry.add<TH1>("hCentFT0C", ";Centrality; ", HistType::kTH1D, {{100, 0, 100}});
     hCentFT0M = qaRegistry.add<TH1>("hCentFT0M", ";Centrality; ", HistType::kTH1D, {{100, 0, 100}});
     hCentFV0A = qaRegistry.add<TH1>("hCentFV0A", ";Centrality; ", HistType::kTH1D, {{100, 0, 100}});
-    
+
     hLnnCandLoss = qaRegistry.add<TH1>("CandCounts/hLnnCandLoss", ";CandLoss; ", HistType::kTH1D, {{7, -0.5, 6.5}});
     hEvents->GetXaxis()->SetBinLabel(1, "All");
     hEvents->GetXaxis()->SetBinLabel(2, "sel8");
@@ -760,8 +759,9 @@ struct LnnRecoTask {
       if (lnnCand.isMatter) {
         hdEdx3HPosTrack->Fill(lnnCand.mom3HTPC, h3track.tpcSignal());
       } else {
-        hdEdx3HNegTrack->Fill(-lnnCand.mom3HTPC, h3track.tpcSignal());}
-      
+        hdEdx3HNegTrack->Fill(-lnnCand.mom3HTPC, h3track.tpcSignal());
+      }
+
       hNsigma3HSel->Fill(chargeFactor * lnnCand.mom3HTPC, lnnCand.nSigma3H);
       if (h3track.hasTOF()) {
         h3HSignalPtTOF->Fill(chargeFactor * h3track.pt(), beta);
@@ -1010,7 +1010,7 @@ struct LnnRecoTask {
       }
 
       // Fill only tracks producing to the current reconstructed collision
-      auto tracksThisCollision = tracksMC.sliceBy( tracksPerCollision, collIdx);
+      auto tracksThisCollision = tracksMC.sliceBy(tracksPerCollision, collIdx);
       for (const auto& trackMC : tracksThisCollision) {
         if (!trackMC.has_mcParticle()) {
           continue;
@@ -1020,7 +1020,7 @@ struct LnnRecoTask {
         if (!isLnnDecay(mc)) {
           continue;
         }
-        fillMcHistograms(trackMC, mc,collision);
+        fillMcHistograms(trackMC, mc, collision);
       }
 
       for (const auto& lnnCand : lnnCandidates) {
@@ -1111,7 +1111,7 @@ struct LnnRecoTask {
       LnnCandidate lnnCand;
       lnnCand.pdgCode = mcPart.pdgCode();
       lnnCand.survEvSelection = isGoodCollision[mcPart.mcCollisionId()];
-      
+
       int chargeFactor = -1 + 2 * (lnnCand.pdgCode > 0);
 
       int kDimGen = 3;
@@ -1236,9 +1236,8 @@ struct LnnRecoTask {
           trSign = daughter.pdgCode() > 0 ? 1 : -1;
 
           daugh1 = ROOT::Math::PxPyPzMVector(daughter.px(), daughter.py(), daughter.pz(), h3Mass);
-        
-        }
-        else if (std::abs(daughter.pdgCode()) == piDauPdg) {
+
+        } else if (std::abs(daughter.pdgCode()) == piDauPdg) {
 
           dauPi = true;
           piSign = daughter.pdgCode() > 0 ? 1 : -1;
@@ -1248,7 +1247,7 @@ struct LnnRecoTask {
       }
 
       if (!dauTr || !dauPi || (trSign * piSign) > 0) {
-          continue;
+        continue;
       }
 
       mother = daugh1 + daugh2;
